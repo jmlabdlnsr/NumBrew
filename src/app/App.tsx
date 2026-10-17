@@ -176,11 +176,6 @@ export default function App() {
                 alt="Universitas Syiah Kuala"
                 loading="lazy"
               />
-              <img
-                src="/assets/icon/Universitas-Siliwangi.png"
-                alt="Universitas Siliwangi"
-                loading="lazy"
-              />
             </div>
             <div className="header-controls">
               <span className="day-pill">
