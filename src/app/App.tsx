@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 import { createSession } from '../application/commands';
 import { PRODUCTS, productIds } from '../data/catalog';
@@ -38,6 +38,7 @@ const nav: { label: string; icon: IconName; panel: Panel }[] = [
 export default function App() {
   const store = useStore(gameStore);
   const { started, panel, toast } = store;
+  const musicRef = useRef<HTMLAudioElement | null>(null);
   const session = store.session ?? preview;
   const day = session.day;
   const report = buildReport(session);
@@ -69,6 +70,36 @@ export default function App() {
     const timeout = setTimeout(() => gameStore.setState({ toast: null }), 4800);
     return () => clearTimeout(timeout);
   }, [toast]);
+  useEffect(() => {
+    if (!musicRef.current) {
+      musicRef.current = new Audio('/assets/backsound/backsound.mpeg');
+      musicRef.current.loop = true;
+      musicRef.current.volume = 0.25;
+      musicRef.current.preload = 'none';
+    }
+    const music = musicRef.current;
+    if (started && store.musicEnabled) {
+      void music.play().catch(() => {
+        if (gameStore.getState().started && gameStore.getState().musicEnabled)
+          gameStore.setState({
+            toast: {
+              text: 'Background music could not be played. Check your browser audio settings.',
+              error: true,
+              id: Date.now(),
+            },
+          });
+      });
+    } else {
+      music.pause();
+    }
+  }, [started, store.musicEnabled]);
+  useEffect(
+    () => () => {
+      musicRef.current?.pause();
+      musicRef.current = null;
+    },
+    [],
+  );
   return (
     <div className={`app-shell ${store.reducedMotion ? 'reduced-motion' : ''}`}>
       <aside className="sidebar">
@@ -138,16 +169,31 @@ export default function App() {
             </p>
           </div>
           <div className="header-actions">
-            <span className="day-pill">
-              <Icon name="sun" size={18} /> Day {day.number}
-            </span>
-            <button
-              className="icon-button help-button"
-              aria-label="Open guide"
-              onClick={() => openPanel('help')}
-            >
-              <Icon name="help" size={22} />
-            </button>
+            <div className="institution-logos" aria-label="Project institutions">
+              <img src="/assets/icon/Logo%20DMGC.png" alt="DMGC" loading="lazy" />
+              <img
+                src="/assets/icon/universitas-syiah-kuala.png"
+                alt="Universitas Syiah Kuala"
+                loading="lazy"
+              />
+              <img
+                src="/assets/icon/Universitas-Siliwangi.png"
+                alt="Universitas Siliwangi"
+                loading="lazy"
+              />
+            </div>
+            <div className="header-controls">
+              <span className="day-pill">
+                <Icon name="sun" size={18} /> Day {day.number}
+              </span>
+              <button
+                className="icon-button help-button"
+                aria-label="Open guide"
+                onClick={() => openPanel('help')}
+              >
+                <Icon name="help" size={22} />
+              </button>
+            </div>
           </div>
         </header>
         {(store.warning || store.readOnly) && (

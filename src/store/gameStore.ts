@@ -14,6 +14,7 @@ interface Store {
   hydrated: boolean;
   readOnly: boolean;
   reducedMotion: boolean;
+  musicEnabled: boolean;
   saveStatus: 'saved' | 'failed' | 'memory';
   savedAt: string | null;
   warning: string;
@@ -29,6 +30,7 @@ interface Store {
   save: () => void;
   retryDay: () => void;
   setReducedMotion: (value: boolean) => void;
+  setMusicEnabled: (value: boolean) => void;
   continueInMemory: () => void;
 }
 
@@ -41,6 +43,7 @@ export const gameStore = createStore<Store>((set, get) => ({
   hydrated: false,
   readOnly: false,
   reducedMotion: false,
+  musicEnabled: true,
   saveStatus: 'saved',
   savedAt: null,
   warning: '',
@@ -129,6 +132,7 @@ export const gameStore = createStore<Store>((set, get) => ({
         session: s.session,
         checkpoint: s.checkpoint,
         reducedMotion: s.reducedMotion,
+        musicEnabled: s.musicEnabled,
       };
       writeSave(localStorage, envelope);
       set({ saveStatus: 'saved', savedAt: envelope.savedAt, warning: '' });
@@ -163,6 +167,10 @@ export const gameStore = createStore<Store>((set, get) => ({
     set({ reducedMotion });
     get().save();
   },
+  setMusicEnabled: (musicEnabled) => {
+    set({ musicEnabled });
+    get().save();
+  },
   continueInMemory: () =>
     set({
       saveStatus: 'memory',
@@ -178,6 +186,7 @@ export function hydrateGame(): void {
       checkpoint: data?.checkpoint ?? null,
       reducedMotion:
         data?.reducedMotion ?? window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+      musicEnabled: data?.musicEnabled ?? true,
       warning,
       savedAt: data?.savedAt ?? null,
       hydrated: true,

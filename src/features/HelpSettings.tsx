@@ -82,6 +82,21 @@ export function SettingsPanel() {
       </div>
       <div className="setting-row">
         <div>
+          <strong>Background music</strong>
+          <p>Loop the cafe soundtrack after you start playing.</p>
+        </div>
+        <label className="switch">
+          <input
+            aria-label="Background music"
+            type="checkbox"
+            checked={store.musicEnabled}
+            onChange={(e) => store.setMusicEnabled(e.target.checked)}
+          />
+          <span />
+        </label>
+      </div>
+      <div className="setting-row">
+        <div>
           <strong>Local save</strong>
           <p>
             {store.saveStatus === 'saved'

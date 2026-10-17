@@ -380,6 +380,28 @@ h1 {
 }
 .header-actions {
   display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  align-self: flex-start;
+  flex-shrink: 0;
+}
+.institution-logos {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.institution-logos img {
+  width: 40px;
+  height: 40px;
+  padding: 3px;
+  object-fit: contain;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.header-controls {
+  display: flex;
   align-items: center;
   gap: 14px;
 }
@@ -2176,6 +2198,9 @@ h1 {
   .header-actions {
     gap: 8px;
   }
+  .header-controls {
+    gap: 8px;
+  }
   .day-pill {
     padding: 8px 10px;
   }
@@ -2260,6 +2285,15 @@ h1 {
   .page-header {
     align-items: flex-start;
     margin-bottom: 22px;
+  }
+  .institution-logos {
+    gap: 4px;
+  }
+  .institution-logos img {
+    width: 32px;
+    height: 32px;
+    padding: 2px;
+    border-radius: 6px;
   }
   .greeting {
     font-size: 7px;

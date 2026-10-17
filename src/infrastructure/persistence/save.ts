@@ -20,6 +20,7 @@ export interface SaveEnvelope {
   session: Session;
   checkpoint: Session;
   reducedMotion: boolean;
+  musicEnabled?: boolean;
 }
 export interface StoragePort {
   getItem(key: string): string | null;
@@ -314,7 +315,8 @@ export function decode(raw: string): SaveEnvelope {
     !validSession(data.checkpoint) ||
     data.checkpoint.day.phase !== 'preparation' ||
     data.checkpoint.id !== data.session.id ||
-    typeof data.reducedMotion !== 'boolean'
+    typeof data.reducedMotion !== 'boolean' ||
+    (data.musicEnabled !== undefined && typeof data.musicEnabled !== 'boolean')
   )
     throw new Error('The save is invalid or its version is not supported.');
   return data as unknown as SaveEnvelope;

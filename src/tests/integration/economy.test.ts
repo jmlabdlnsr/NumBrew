@@ -325,6 +325,11 @@ describe('save recovery', () => {
   it('rejects unknown versions, invalid references and contradictory cash', () => {
     const valid = envelope(stocked());
     expect(() => decode(JSON.stringify({ ...valid, version: 2 }))).toThrow();
+    expect(decode(JSON.stringify({ ...valid, musicEnabled: false })).musicEnabled).toBe(false);
+    expect(() => decode(JSON.stringify({ ...valid, musicEnabled: 'off' }))).toThrow();
+    const beforeMusicSetting = { ...valid };
+    delete beforeMusicSetting.musicEnabled;
+    expect(decode(JSON.stringify(beforeMusicSetting)).musicEnabled).toBeUndefined();
     const wrong = structuredClone(valid);
     wrong.session.cash++;
     expect(() => decode(JSON.stringify(wrong))).toThrow();
