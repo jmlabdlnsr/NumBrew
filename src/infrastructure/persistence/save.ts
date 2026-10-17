@@ -8,6 +8,7 @@ import {
 } from '../../data/catalog';
 import type { Session } from '../../domain/types';
 import { BREW_SECONDS } from '../../domain/customer/service';
+import { quotePrice } from '../../domain/promotion/promotion';
 
 export const SAVE_KEY = 'numbrew.save.v1';
 export const BACKUP_KEY = 'numbrew.backup.v1';
@@ -70,12 +71,22 @@ function migrateLegacyService(session: unknown): void {
       askedTaste: false,
       askedBudget: false,
       refusals: 0,
-      line: 'Pesanan saya sudah dicatat. Terima kasih!',
+      line: 'My order has been taken. Thank you!',
       style: null,
       startedAt: null,
       readyAt: null,
     };
   }
+}
+
+function validDiscount(gross: unknown, discount: unknown, percent: unknown): boolean {
+  return (
+    uint(gross, CONFIG.maxPrice) &&
+    gross > 0 &&
+    uint(discount, gross - 1) &&
+    uint(percent, CONFIG.maxDiscountPercent) &&
+    quotePrice({ price: gross, discountPercent: percent }).discount === discount
+  );
 }
 
 function validReceipt(r: any): boolean {
@@ -90,7 +101,7 @@ function validReceipt(r: any): boolean {
     uint(r.time) &&
     uint(r.price, CONFIG.maxPrice) &&
     r.price > 0 &&
-    r.discount === 0 &&
+    validDiscount(r.price, r.discount, r.discountPercent ?? 0) &&
     r.tax === 0 &&
     uint(r.hpp) &&
     Array.isArray(r.lines) &&
@@ -153,6 +164,8 @@ export function validSession(s: unknown): s is Session {
         typeof s.menu[id].active === 'boolean' &&
         uint(s.menu[id].price, CONFIG.maxPrice) &&
         s.menu[id].price > 0 &&
+        (s.menu[id].discountPercent === undefined ||
+          uint(s.menu[id].discountPercent, CONFIG.maxDiscountPercent)) &&
         (s.menu[id].calculatedHpp === undefined ||
           (uint(s.menu[id].calculatedHpp, CONFIG.maxCash) && s.menu[id].calculatedHpp > 0)),
     )
@@ -205,6 +218,7 @@ export function validSession(s: unknown): s is Session {
         uint(c.budget, CONFIG.maxPrice) &&
         uint(c.price, c.budget) &&
         c.price > 0 &&
+        validDiscount(c.price + (c.discount ?? 0), c.discount ?? 0, c.discountPercent ?? 0) &&
         uint(c.arrivedAt, d.elapsed) &&
         uint(c.patience, 600) &&
         c.patience > 0 &&
@@ -226,7 +240,7 @@ export function validSession(s: unknown): s is Session {
   const expectedCash =
     d.cashStart -
     d.purchases +
-    d.receipts.reduce((n: number, r: any) => n + r.price, 0) -
+    d.receipts.reduce((n: number, r: any) => n + r.price - r.discount, 0) -
     (d.settled ? d.operatingCost : 0);
   if (s.cash !== expectedCash) return false;
   if (
@@ -275,6 +289,8 @@ export function validSession(s: unknown): s is Session {
           (typeof r.profitPct === 'number' && Number.isFinite(r.profitPct))) &&
         Array.isArray(r.receipts) &&
         r.receipts.every(validReceipt) &&
+        r.discount <= r.revenue &&
+        r.netRevenue === r.revenue - r.discount &&
         r.profit === r.netRevenue - r.hpp - r.operating - r.tax,
     )
   )
@@ -283,7 +299,7 @@ export function validSession(s: unknown): s is Session {
 }
 
 export function decode(raw: string): SaveEnvelope {
-  if (raw.length > 4_000_000) throw new Error('Save terlalu besar.');
+  if (raw.length > 4_000_000) throw new Error('Save file is too large.');
   const data: unknown = JSON.parse(raw);
   if (object(data) && data.version === 1) {
     // Only parsed data is normalized; validation never mutates caller-owned sessions.
@@ -300,7 +316,7 @@ export function decode(raw: string): SaveEnvelope {
     data.checkpoint.id !== data.session.id ||
     typeof data.reducedMotion !== 'boolean'
   )
-    throw new Error('Save tidak valid atau versinya belum didukung.');
+    throw new Error('The save is invalid or its version is not supported.');
   return data as unknown as SaveEnvelope;
 }
 export function readSave(storage: StoragePort): { data: SaveEnvelope | null; warning: string } {
@@ -314,9 +330,9 @@ export function readSave(storage: StoragePort): { data: SaveEnvelope | null; war
       return {
         data: decode(raw),
         warning: isBackup
-          ? 'Save utama bermasalah. Cadangan terakhir dipulihkan.'
+          ? 'The main save is damaged. The latest backup was restored.'
           : isLegacy
-            ? 'Save Kafe Hitung ditemukan dan akan dilanjutkan di NumBrew.'
+            ? 'A Kafe Hitung save was found and will continue in NumBrew.'
             : '',
       };
     } catch {
@@ -326,7 +342,7 @@ export function readSave(storage: StoragePort): { data: SaveEnvelope | null; war
   return {
     data: null,
     warning: damaged
-      ? 'Save tidak bisa dibaca. Data lama dipertahankan; mulai baru hanya jika kamu memilihnya.'
+      ? 'The save could not be read. Your old data has been kept; a new game will only start if you choose it.'
       : '',
   };
 }

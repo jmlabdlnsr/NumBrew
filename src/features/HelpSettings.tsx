@@ -3,41 +3,46 @@ import { useStore } from 'zustand';
 import { gameStore } from '../store/gameStore';
 import { Icon } from '../components/Icon';
 import { money } from '../utils/format';
+import { CONFIG } from '../data/catalog';
 
 export function HelpPanel() {
   const items = [
     [
       'basket',
-      'Belanja secukupnya',
-      'Beli bahan dari supplier. Kas berubah menjadi stok, bukan langsung menjadi kerugian.',
+      'Buy what you need',
+      'Buy ingredients from the supplier. Cash becomes stock; it is not an immediate loss.',
     ],
     [
       'calculator',
-      'Kenali biaya setiap cup',
-      'Di Menu & harga, lihat biaya setiap bahan per porsi, termasuk kemasan. Jumlahkan sendiri, isi HPP, lalu Periksa HPP sebelum menentukan harga jual.',
+      'Know the cost of each cup',
+      'In Menu & pricing, review the cost of each ingredient per serving, including packaging. Add them up, enter your COGS, then select Check COGS before setting a selling price.',
     ],
     [
       'coffee',
-      'Pilih harga, buka kafe',
-      'Harga lebih rendah bisa menarik pelanggan. Harga lebih tinggi memberi untung per cup lebih besar, tetapi belum tentu terjangkau.',
+      'Set prices and open your cafe',
+      'Lower prices can attract customers. Higher prices offer more profit per cup, but may be less affordable.',
+    ],
+    [
+      'discount',
+      'Consider a promotion',
+      'Set discounts per menu item in Promotions & discounts during preparation. Lower prices can attract buyers, but COGS stays the same, reducing your margin. Discounts are locked while the cafe is open.',
     ],
     [
       'users',
-      'Kenali tamu, racik pesanan',
-      'Sebagian besar tamu langsung memesan; beberapa meminta rekomendasi. Bantu mereka memilih sesuai selera dan budget. Tekan Siapkan Pesanan, tunggu proses racik 6 detik, lalu serahkan minuman. Bahan berkurang dan pembayaran diterima saat penyerahan.',
+      'Serve customers',
+      'Listen to orders or help customers choose a drink. Once agreed, prepare the order and hand it over when ready.',
     ],
     [
       'report',
-      'Baca cerita di balik angka',
-      'Saat tutup, pendapatan dikurangi HPP dan biaya operasional. Buka Lihat Perhitungan untuk menelusuri hasilmu.',
+      'Calculate your results',
+      `After closing, subtract discounts from gross sales. Then subtract COGS and operating costs of ${money(CONFIG.operatingCost)} to calculate your profit or loss.`,
     ],
   ] as const;
   return (
     <>
       <div className="help-banner">
         <Icon name="sprout" size={32} />
-        <h3>Kafe kecil. Pelajaran besar.</h3>
-        <p>Tidak ada jawaban wajib. Coba keputusanmu, lihat hasilnya, lalu racik strategi baru.</p>
+        <h3>Your first cafe starts here.</h3>
       </div>
       <div className="help-steps">
         {items.map(([icon, title, body], i) => (
@@ -51,13 +56,6 @@ export function HelpPanel() {
           </div>
         ))}
       </div>
-      <div className="learning-note">
-        <Icon name="pause" />
-        <p>
-          Waktu berhenti selama panel ini terbuka. Kamu juga dapat menjeda kafe kapan saja. Saat
-          kembali dari tab lain, tekan Lanjutkan untuk melanjutkan simulasi.
-        </p>
-      </div>
     </>
   );
 }
@@ -69,12 +67,12 @@ export function SettingsPanel() {
     <>
       <div className="setting-row">
         <div>
-          <strong>Kurangi animasi</strong>
-          <p>Transisi lebih tenang, informasi tetap lengkap.</p>
+          <strong>Reduce motion</strong>
+          <p>Gentler transitions with all the same information.</p>
         </div>
         <label className="switch">
           <input
-            aria-label="Kurangi animasi"
+            aria-label="Reduce motion"
             type="checkbox"
             checked={store.reducedMotion}
             onChange={(e) => store.setReducedMotion(e.target.checked)}
@@ -84,11 +82,11 @@ export function SettingsPanel() {
       </div>
       <div className="setting-row">
         <div>
-          <strong>Penyimpanan lokal</strong>
+          <strong>Local save</strong>
           <p>
             {store.saveStatus === 'saved'
-              ? 'Progres disimpan di browser ini.'
-              : store.warning || 'Penyimpanan belum tersedia.'}
+              ? 'Progress is saved in this browser.'
+              : store.warning || 'Saving is not available yet.'}
           </p>
         </div>
         <button
@@ -99,53 +97,55 @@ export function SettingsPanel() {
             store.save();
           }}
         >
-          Simpan lagi
+          Save again
         </button>
       </div>
       {store.saveStatus === 'failed' && (
         <button className="button secondary full" onClick={store.continueInMemory}>
-          Lanjut tanpa save untuk sesi ini
+          Continue without saving this session
         </button>
       )}
       <div className="setting-row">
         <div>
-          <strong>Ulangi hari ini</strong>
-          <p>Kembali ke awal persiapan. Belanja dan penjualan hari ini dibatalkan.</p>
+          <strong>Retry today</strong>
+          <p>Return to the start of preparation. Purchases and sales made today will be undone.</p>
         </div>
         <button
           className="button secondary"
           disabled={!store.session || store.readOnly}
           onClick={() => setConfirm('retry')}
         >
-          <Icon name="reset" size={17} /> Ulangi
+          <Icon name="reset" size={17} /> Retry
         </button>
       </div>
       <div className="setting-row">
         <div>
-          <strong>Mulai usaha baru</strong>
-          <p>Ganti progres saat ini dengan modal awal {money(500_000)}.</p>
+          <strong>Start a new cafe</strong>
+          <p>Replace current progress with starting capital of {money(500_000)}.</p>
         </div>
         <button
           className="button danger"
           disabled={store.readOnly}
           onClick={() => setConfirm('new')}
         >
-          Mulai ulang
+          Start over
         </button>
       </div>
       {confirm && (
         <div className="confirm-box" role="alert">
           <h3>
-            {confirm === 'new' ? 'Ganti progres dengan usaha baru?' : 'Kembali ke awal hari ini?'}
+            {confirm === 'new'
+              ? 'Replace your progress with a new cafe?'
+              : 'Return to the start of today?'}
           </h3>
           <p>
             {confirm === 'new'
-              ? 'Kas, stok, dan seluruh riwayat usaha saat ini akan diganti.'
-              : 'Seluruh hasil setelah checkpoint persiapan hari ini akan dibatalkan.'}
+              ? 'Your current cash, stock, and business history will be replaced.'
+              : 'All progress since the preparation checkpoint for today will be undone.'}
           </p>
           <div className="button-row">
             <button className="button secondary" onClick={() => setConfirm(null)}>
-              Batal
+              Cancel
             </button>
             <button
               className="button danger"
@@ -154,7 +154,7 @@ export function SettingsPanel() {
                 setConfirm(null);
               }}
             >
-              {confirm === 'new' ? 'Ya, mulai usaha baru' : 'Ya, ulangi hari'}
+              {confirm === 'new' ? 'Yes, start a new cafe' : 'Yes, retry today'}
             </button>
           </div>
         </div>

@@ -22,11 +22,13 @@ import {
 } from '../domain/customer/service';
 import { buildReport } from '../domain/reports/report';
 import { profitFeedback } from '../domain/reports/profitCalculation';
+import { quotePrice } from '../domain/promotion/promotion';
 import type { Day, GameResult, Session } from '../domain/types';
 
 export type Command =
   | { type: 'buy'; cart: Partial<Record<IngredientId, number>> }
   | { type: 'price'; product: ProductId; price: number }
+  | { type: 'promotion'; product: ProductId; percent: number }
   | { type: 'calculate_hpp'; product: ProductId; answer: number }
   | { type: 'calculate_profit'; day: number; answer: number }
   | { type: 'toggle'; product: ProductId }
@@ -98,7 +100,7 @@ function reputation(state: Session, delta: number): void {
   );
 }
 function settle(state: Session): void {
-  if (state.day.settled) throw new Error('Laporan hari ini sudah diselesaikan.');
+  if (state.day.settled) throw new Error('The report for today has already been finalized.');
   state.day.missed.closing += state.day.customers.length;
   state.day.customers = [];
   state.cash -= state.day.operatingCost;
@@ -107,7 +109,7 @@ function settle(state: Session): void {
     day: state.day.number,
     kind: 'operating',
     amount: -state.day.operatingCost,
-    description: 'Biaya operasional harian',
+    description: 'Daily operating costs',
   });
   state.day.settled = true;
   state.day.phase = 'report';
@@ -135,7 +137,10 @@ function arrival(state: Session): void {
     d.missed[inStock ? 'over_budget' : 'no_available_menu']++;
     return;
   }
-  if (random(state) > purchaseChance(state.menu[product].price, state.reputation, archetype)) {
+  const quote = quotePrice(state.menu[product]);
+  if (
+    random(state) > purchaseChance(quote.net, state.reputation, archetype, quote.discountPercent)
+  ) {
     d.missed.low_interest++;
     return;
   }
@@ -150,11 +155,16 @@ function arrival(state: Session): void {
     name: profile.names[Math.floor(random(state) * profile.names.length)],
     product,
     budget,
-    price: state.menu[product].price,
+    price: quote.net,
+    discount: quote.discount,
+    discountPercent: quote.discountPercent,
     arrivedAt: d.elapsed,
     patience: profile.patience,
     service: createArrivalService({ id, archetype, product }, random(state)),
   });
+  const customer = d.customers[d.customers.length - 1];
+  if (quote.discount > 0 && customer.service.stage === 'ordered')
+    customer.service.line += ` With the discount of ${quote.discountPercent}%, that is Rp${quote.net.toLocaleString('id-ID')}, please.`;
 }
 
 export function dispatchCommand(previous: Session, command: Command): GameResult {
@@ -164,21 +174,21 @@ export function dispatchCommand(previous: Session, command: Command): GameResult
   try {
     let message = '';
     if (
-      ['buy', 'price', 'calculate_hpp', 'toggle', 'open'].includes(command.type) &&
+      ['buy', 'price', 'promotion', 'calculate_hpp', 'toggle', 'open'].includes(command.type) &&
       d.phase !== 'preparation'
     )
-      throw new Error('Pengaturan hanya tersedia saat persiapan.');
+      throw new Error('Settings are only available during preparation.');
     switch (command.type) {
       case 'buy': {
         if (Object.keys(command.cart).some((id) => !ingredientIds.includes(id as IngredientId)))
-          throw new Error('Bahan tidak dikenal.');
+          throw new Error('Unknown ingredient.');
         const items = ingredientIds.map((id) => ({
           id,
-          packs: integer(command.cart[id] ?? 0, 'Jumlah paket', 100),
+          packs: integer(command.cart[id] ?? 0, 'Number of packs', 100),
         }));
         const total = items.reduce((n, { id, packs }) => n + packs * INGREDIENTS[id].cost, 0);
-        if (total <= 0) throw new Error('Pilih minimal satu paket bahan.');
-        if (total > state.cash) throw new Error('Kas belum cukup untuk pembelian ini.');
+        if (total <= 0) throw new Error('Select at least one ingredient pack.');
+        if (total > state.cash) throw new Error('Not enough cash for this purchase.');
         for (const { id, packs } of items.filter((i) => i.packs)) {
           const def = INGREDIENTS[id];
           state.inventory[id].push({
@@ -195,51 +205,59 @@ export function dispatchCommand(previous: Session, command: Command): GameResult
           day: d.number,
           kind: 'purchase',
           amount: -total,
-          description: 'Pembelian bahan supplier',
+          description: 'Ingredient purchase from supplier',
         });
-        message = 'Bahan sudah tiba. Saatnya meracik rencana!';
+        message = 'Your ingredients have arrived. Time to plan your menu!';
         break;
       }
       case 'calculate_hpp': {
-        if (!PRODUCTS[command.product]) throw new Error('Menu tidak dikenal.');
+        if (!PRODUCTS[command.product]) throw new Error('Unknown menu item.');
         const expected = recipeCost(state.inventory, command.product).hpp;
         const feedback = hppFeedback(command.answer, expected);
         if (feedback) throw new Error(feedback);
         state.menu[command.product].calculatedHpp = command.answer;
-        message = 'Perhitungan HPP tepat. Sekarang tentukan harga jualmu.';
+        message = 'Your COGS calculation is correct. Now set your selling price.';
         break;
       }
       case 'calculate_profit': {
-        integer(command.day, 'Hari laporan');
+        integer(command.day, 'Report day');
         const report = state.reports.find((r) => r.day === command.day);
-        if (!report) throw new Error('Hasil akhir baru dapat disimpan setelah hari selesai.');
+        if (!report) throw new Error('Final results can only be saved after the day ends.');
         const feedback = profitFeedback(command.answer, report.profit);
         if (feedback) throw new Error(feedback);
         report.calculatedProfit = command.answer;
-        message = 'Perhitungan laba / rugi bersih tepat. Hasilmu tersimpan di laporan hari ini.';
+        message =
+          'Your net profit / loss calculation is correct. Your result is saved in the daily report.';
         break;
       }
+      case 'promotion':
+        if (!PRODUCTS[command.product]) throw new Error('Unknown menu item.');
+        integer(command.percent, 'Discount', CONFIG.maxDiscountPercent);
+        state.menu[command.product].discountPercent = command.percent;
+        message = command.percent
+          ? `Discount ${command.percent}% for ${PRODUCTS[command.product].name} saved.`
+          : `Promo ${PRODUCTS[command.product].name} disabled.`;
+        break;
       case 'price':
-        if (!PRODUCTS[command.product]) throw new Error('Menu tidak dikenal.');
-        integer(command.price, 'Harga', CONFIG.maxPrice);
-        if (command.price < 1) throw new Error('Harga harus lebih dari Rp0.');
+        if (!PRODUCTS[command.product]) throw new Error('Unknown menu item.');
+        integer(command.price, 'Price', CONFIG.maxPrice);
+        if (command.price < 1) throw new Error('Price must be greater than Rp0.');
         if (!hasCalculatedHpp(state, command.product))
-          throw new Error('Hitung dan periksa HPP per porsi sebelum menyimpan harga jual.');
+          throw new Error('Calculate and check COGS per serving before saving the selling price.');
         state.menu[command.product].price = command.price;
-        message = 'Harga menu berhasil disimpan.';
+        message = 'Menu price saved.';
         break;
       case 'toggle':
-        if (!PRODUCTS[command.product]) throw new Error('Menu tidak dikenal.');
+        if (!PRODUCTS[command.product]) throw new Error('Unknown menu item.');
         state.menu[command.product].active = !state.menu[command.product].active;
         break;
       case 'open':
         if (!productIds.some((id) => state.menu[id].active && capacity(state.inventory, id) > 0))
-          throw new Error('Siapkan bahan untuk minimal satu menu aktif.');
-        if (state.cash < d.operatingCost)
-          throw new Error('Sisakan Rp20.000 untuk biaya operasional.');
+          throw new Error('Prepare ingredients for at least one enabled menu item.');
+        if (state.cash < d.operatingCost) throw new Error('Reserve Rp20.000 for operating costs.');
         d.phase = 'open';
         state.tutorialSeen = true;
-        message = 'Kafe dibuka. Pelanggan pertama segera datang!';
+        message = 'Cafe open. Your first customer will arrive soon!';
         break;
       case 'tick':
         if (d.phase !== 'open' && d.phase !== 'closing') return { state: previous, message: '' };
@@ -255,7 +273,7 @@ export function dispatchCommand(previous: Session, command: Command): GameResult
         if (d.phase === 'open' && d.elapsed >= d.duration) {
           d.phase = 'closing';
           d.closeAt = d.elapsed + CONFIG.closingSeconds;
-          message = 'Jam buka selesai. Selesaikan antrean yang tersisa.';
+          message = 'Opening hours are over. Serve the remaining queue.';
         }
         if (d.phase === 'open' && d.elapsed >= d.nextArrival) {
           arrival(state);
@@ -268,63 +286,70 @@ export function dispatchCommand(previous: Session, command: Command): GameResult
           if (customer.service.stage === 'preparing' && d.elapsed >= customer.service.readyAt!) {
             customer.service.stage = 'ready';
             customer.service.line = [
-              'Wah, sudah jadi! Boleh kuserahkan pembayarannya sekarang?',
-              'Aromanya sudah tercium. Aku siap menerima minumannya!',
-              'Minumannya kelihatan siap. Terima kasih sudah meracik!',
+              'Oh, it is ready! Can I pay now?',
+              'It smells great. I am ready for my drink!',
+              'The drink looks ready. Thank you for making it!',
             ][customer.service.variant];
           }
         }
         if (d.phase === 'closing' && (d.customers.length === 0 || d.elapsed >= d.closeAt)) {
           settle(state);
-          message = 'Hari selesai. Lihat cerita di balik angkanya.';
+          message = 'Day complete. Discover the story behind the numbers.';
         }
         break;
       case 'ask': {
-        if (d.phase !== 'open' && d.phase !== 'closing') throw new Error('Kafe belum buka.');
+        if (d.phase !== 'open' && d.phase !== 'closing')
+          throw new Error('The cafe is not open yet.');
         const customer = d.customers.find((c) => c.id === command.id);
         if (!customer || customer.service.stage !== 'greeting')
-          throw new Error('Pelanggan ini sudah memilih pesanannya.');
+          throw new Error('This customer has already chosen an order.');
         if (command.topic !== 'taste' && command.topic !== 'budget')
-          throw new Error('Pertanyaan tidak dikenal.');
+          throw new Error('Unknown question.');
         const flag = command.topic === 'taste' ? 'askedTaste' : 'askedBudget';
-        if (customer.service[flag]) throw new Error('Pertanyaan ini sudah dijawab.');
+        if (customer.service[flag]) throw new Error('This question has already been answered.');
         customer.service[flag] = true;
         customer.service.line =
           command.topic === 'taste'
             ? tasteReply(customer)
-            : `Budgetku maksimal Rp${customer.budget.toLocaleString('id-ID')}. Bantu pilih yang pas, ya.`;
+            : `My budget is up to Rp${customer.budget.toLocaleString('id-ID')}. Please help me choose something within that.`;
         break;
       }
       case 'offer': {
-        if (d.phase !== 'open' && d.phase !== 'closing') throw new Error('Kafe belum buka.');
+        if (d.phase !== 'open' && d.phase !== 'closing')
+          throw new Error('The cafe is not open yet.');
         const customer = d.customers.find((c) => c.id === command.id);
         if (!customer || customer.service.stage !== 'greeting')
-          throw new Error('Pesanan sudah disepakati.');
+          throw new Error('The order has already been agreed.');
         if (!PRODUCTS[command.product] || !state.menu[command.product].active)
-          throw new Error('Menu ini tidak tersedia hari ini.');
+          throw new Error('This menu item is not available today.');
         if (brewingCapacity(state, command.product) < 1)
-          throw new Error('Bahan menu ini habis atau sedang digunakan racikan lain.');
-        const price = state.menu[command.product].price;
+          throw new Error(
+            'Ingredients for this drink are out of stock or reserved for another order.',
+          );
+        const quote = quotePrice(state.menu[command.product]);
+        const price = quote.net;
         if (price > customer.budget) {
           customer.service.refusals++;
           customer.patience = Math.max(1, customer.patience - 4);
-          customer.service.line = `Rp${price.toLocaleString('id-ID')} melewati budgetku. Maksimalku Rp${customer.budget.toLocaleString('id-ID')}. Ada pilihan lain?`;
+          customer.service.line = `Rp${price.toLocaleString('id-ID')} is over my budget. My limit is Rp${customer.budget.toLocaleString('id-ID')}. Is there another option?`;
           customer.service.askedBudget = true;
           if (customer.service.refusals >= 3) {
             d.customers = d.customers.filter((c) => c.id !== customer.id);
             d.missed.low_interest++;
             reputation(state, -1);
-            message = `${customer.name} pamit karena tiga tawaran tidak sesuai budget. Reputasi berkurang.`;
+            message = `${customer.name} left after three offers exceeded their budget. Reputation decreased.`;
           }
           break;
         }
         customer.product = command.product;
         customer.price = price;
+        customer.discount = quote.discount;
+        customer.discountPercent = quote.discountPercent;
         customer.service.stage = 'ordered';
         customer.service.line =
           command.product === PEOPLE[customer.archetype].favorite
-            ? `${PRODUCTS[command.product].name} memang kesukaanku! Setuju Rp${price.toLocaleString('id-ID')}, satu cup, ya.`
-            : `Boleh, aku coba ${PRODUCTS[command.product].name}. Rp${price.toLocaleString('id-ID')} masih pas di budgetku.`;
+            ? `${PRODUCTS[command.product].name} is my favorite! Rp${price.toLocaleString('id-ID')} works for me. One cup, please.`
+            : `Sure, I will try ${PRODUCTS[command.product].name}. Rp${price.toLocaleString('id-ID')} is within my budget.`;
         break;
       }
       case 'change_order': {
@@ -334,40 +359,44 @@ export function dispatchCommand(previous: Session, command: Command): GameResult
           customer.service.stage !== 'ordered' ||
           !['open', 'closing'].includes(d.phase)
         )
-          throw new Error('Pesanan ini tidak bisa diganti saat sedang diracik.');
+          throw new Error('This order cannot be changed while it is being prepared.');
         customer.service.stage = 'greeting';
         customer.service.line =
-          'Baik, kita pilih ulang sebelum mulai meracik. Ada rekomendasi lain?';
+          'All right, let us choose again before preparing it. Any other recommendations?';
         break;
       }
       case 'brew': {
-        if (d.phase !== 'open' && d.phase !== 'closing') throw new Error('Kafe belum buka.');
+        if (d.phase !== 'open' && d.phase !== 'closing')
+          throw new Error('The cafe is not open yet.');
         const customer = d.customers.find((c) => c.id === command.id);
         if (!customer || customer.service.stage !== 'ordered')
-          throw new Error('Sepakati menu sebelum meracik.');
+          throw new Error('Agree on a drink before preparing it.');
         if (brewingCapacity(state, customer.product, customer.id) < 1)
-          throw new Error('Bahan sedang dipakai pesanan lain. Tawarkan menu lain sebelum meracik.');
+          throw new Error(
+            'Ingredients are reserved for another order. Offer a different drink before preparing it.',
+          );
         customer.service.stage = 'preparing';
         customer.service.style = 'standard';
         customer.service.startedAt = d.elapsed;
         customer.service.readyAt = d.elapsed + BREW_SECONDS.standard;
         customer.service.line = [
-          'Baik, aku tunggu minumannya. Terima kasih!',
-          'Wah, mulai diracik. Aku tunggu di sini, ya.',
-          'Sip, aromanya mulai tercium. Tidak sabar mencicipinya.',
+          'All right, I will wait for my drink. Thank you!',
+          'Great, you have started making it. I will wait here.',
+          'Nice, I can smell it already. Looking forward to tasting it.',
         ][customer.service.variant];
         break;
       }
       case 'serve': {
-        if (d.phase !== 'open' && d.phase !== 'closing') throw new Error('Kafe belum buka.');
+        if (d.phase !== 'open' && d.phase !== 'closing')
+          throw new Error('The cafe is not open yet.');
         const customer = d.customers.find((c) => c.id === command.id);
-        if (!customer) throw new Error('Pesanan ini sudah selesai atau pelanggan sudah pergi.');
+        if (!customer) throw new Error('This order is complete or the customer has already left.');
         if (customer.service.stage !== 'ready')
           throw new Error(
-            'Minuman belum siap diserahkan. Sepakati pesanan dan racik terlebih dahulu.',
+            'The drink is not ready to serve. Agree on an order and prepare it first.',
           );
         if (capacity(state.inventory, customer.product) < 1)
-          throw new Error('Bahan untuk pesanan ini sudah habis.');
+          throw new Error('Ingredients for this order are out of stock.');
         const lines = Object.entries(PRODUCTS[customer.product].recipe).map(([key, quantity]) => {
           const ingredient = key as IngredientId;
           return { ingredient, quantity, cost: consume(state.inventory, ingredient, quantity) };
@@ -378,21 +407,23 @@ export function dispatchCommand(previous: Session, command: Command): GameResult
           customer: customer.name,
           product: customer.product,
           day: d.number,
-          price: customer.price,
-          discount: 0,
+          price: customer.price + (customer.discount ?? 0),
+          discount: customer.discount ?? 0,
+          discountPercent: customer.discountPercent ?? 0,
           tax: 0,
           hpp: lines.reduce((n, l) => n + l.cost, 0),
           lines,
           time: d.elapsed,
         };
-        integer(state.cash + receipt.price, 'Kas', CONFIG.maxCash);
-        state.cash += receipt.price;
+        const paid = receipt.price - receipt.discount;
+        integer(state.cash + paid, 'Cash', CONFIG.maxCash);
+        state.cash += paid;
         d.receipts.push(receipt);
         state.ledger.push({
           id: receipt.id,
           day: d.number,
           kind: 'sale',
-          amount: receipt.price,
+          amount: paid,
           description: PRODUCTS[receipt.product].name,
         });
         d.customers = d.customers.filter((c) => c.id !== customer.id);
@@ -408,41 +439,41 @@ export function dispatchCommand(previous: Session, command: Command): GameResult
         state.revision++;
         return {
           state,
-          message: `${PRODUCTS[receipt.product].name} untuk ${customer.name}. Terima kasih!`,
+          message: `${PRODUCTS[receipt.product].name} for ${customer.name}. Thank you!`,
           receipt,
           reaction: {
             customerId: customer.id,
             name: customer.name,
             archetype: customer.archetype,
             line: thankYou(customer),
-            contribution: receipt.price - receipt.hpp,
+            contribution: paid - receipt.hpp,
             reputationDelta: state.reputation - priorReputation,
           },
         };
       }
       case 'close':
-        if (d.phase !== 'open') throw new Error('Kafe tidak sedang buka.');
+        if (d.phase !== 'open') throw new Error('The cafe is not currently open.');
         d.phase = 'closing';
         d.closeAt = d.elapsed + CONFIG.closingSeconds;
         if (!d.customers.length) settle(state);
         message = d.settled
-          ? 'Hari selesai. Laporanmu sudah siap.'
-          : 'Kedatangan dihentikan. Layani antrean terakhir.';
+          ? 'Day complete. Your report is ready.'
+          : 'No more arrivals. Serve the remaining queue.';
         break;
       case 'finish':
-        if (d.phase !== 'closing') throw new Error('Selesaikan jam operasional terlebih dahulu.');
+        if (d.phase !== 'closing') throw new Error('Finish opening hours first.');
         settle(state);
-        message = 'Kafe ditutup. Laporanmu sudah siap.';
+        message = 'Cafe closed. Your report is ready.';
         break;
       case 'next':
         if (d.phase !== 'report' || !d.settled)
-          throw new Error('Selesaikan laporan hari ini terlebih dahulu.');
+          throw new Error('Complete the report for today first.');
         state.day = newDay(d.number + 1, state.cash, state.reputation);
         ingredientIds.forEach((id) => {
           state.inventory[id] = state.inventory[id].filter((b) => b.consumed < b.quantity);
         });
         state.ledger = state.ledger.filter((l) => l.day > d.number - 7);
-        message = 'Hari baru, peluang baru. Apa rencanamu hari ini?';
+        message = 'A new day, new opportunities. What is your plan today?';
         break;
       case 'tutorial':
         state.tutorialSeen = true;
@@ -453,7 +484,7 @@ export function dispatchCommand(previous: Session, command: Command): GameResult
   } catch (error) {
     return {
       state: previous,
-      message: error instanceof Error ? error.message : 'Tindakan tidak dapat diproses.',
+      message: error instanceof Error ? error.message : 'This action could not be processed.',
       error: true,
     };
   }

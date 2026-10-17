@@ -2,35 +2,37 @@ import { useEffect } from 'react';
 import { useStore } from 'zustand';
 import { createSession } from '../application/commands';
 import { PRODUCTS, productIds } from '../data/catalog';
-import { capacity, inventoryValue, recipeCost } from '../domain/inventory/inventory';
+import { capacity, inventoryValue } from '../domain/inventory/inventory';
 import { buildReport } from '../domain/reports/report';
-import { hasCalculatedHpp } from '../domain/pricing/hpp';
 import { gameStore, type Panel } from '../store/gameStore';
 import { Icon, type IconName } from '../components/Icon';
 import { Modal } from '../components/Modal';
 import { PhaserHost } from '../game/PhaserHost';
 import { InventoryPanel, PricingPanel, ProductArt, SupplierPanel } from '../features/Management';
-import { ReceiptCalculation, ReportPanel } from '../features/Reports';
+import { ReportPanel } from '../features/Reports';
 import { HelpPanel, SettingsPanel } from '../features/HelpSettings';
 import { CounterMenu, CustomerBubbles, ServiceCounter } from '../features/CustomerService';
 import { gameTime, money } from '../utils/format';
+import { quotePrice } from '../domain/promotion/promotion';
+import { PromotionPanel } from '../features/Promotion';
 
 const preview = createSession(20261016, 'preview');
-const panels: Record<NonNullable<Panel>, { title: string; eyebrow: string }> = {
-  supplier: { title: 'Belanja bahan, racik peluang.', eyebrow: 'SUPPLIER KAFE' },
-  inventory: { title: 'Semua yang ada di rakmu.', eyebrow: 'PERSEDIAAN' },
-  pricing: { title: 'Menu yang punya cerita.', eyebrow: 'MENU & HARGA' },
-  report: { title: 'Cerita di balik angka.', eyebrow: 'LAPORAN USAHA' },
-  help: { title: 'Mari kenali kafemu.', eyebrow: 'BUKU PANDUAN' },
-  settings: { title: 'Buat dirimu nyaman.', eyebrow: 'PENGATURAN' },
-  calculation: { title: 'Dari bahan menjadi hasil.', eyebrow: 'LIHAT PERHITUNGAN' },
+const panels: Record<NonNullable<Panel>, { title: string; eyebrow?: string }> = {
+  supplier: { title: 'Buy ingredients' },
+  inventory: { title: 'Inventory' },
+  pricing: { title: 'Menu & pricing' },
+  promotion: { title: 'Promotions & discounts' },
+  report: { title: 'Business report' },
+  help: { title: 'Get to know your cafe.', eyebrow: 'GAME GUIDE' },
+  settings: { title: 'Make yourself comfortable.', eyebrow: 'SETTINGS' },
 };
 const nav: { label: string; icon: IconName; panel: Panel }[] = [
-  { label: 'Kafe saya', icon: 'store', panel: null },
-  { label: 'Beli bahan', icon: 'basket', panel: 'supplier' },
-  { label: 'Persediaan', icon: 'package', panel: 'inventory' },
-  { label: 'Menu & harga', icon: 'coffee', panel: 'pricing' },
-  { label: 'Laporan usaha', icon: 'report', panel: 'report' },
+  { label: 'My cafe', icon: 'store', panel: null },
+  { label: 'Buy ingredients', icon: 'basket', panel: 'supplier' },
+  { label: 'Inventory', icon: 'package', panel: 'inventory' },
+  { label: 'Menu & pricing', icon: 'coffee', panel: 'pricing' },
+  { label: 'Promotions & discounts', icon: 'discount', panel: 'promotion' },
+  { label: 'Business report', icon: 'report', panel: 'report' },
 ];
 
 export default function App() {
@@ -49,12 +51,12 @@ export default function App() {
   const canOpen = ready && session.cash >= day.operatingCost;
   const activeMenu = productIds.filter((id) => session.menu[id].active).length;
   const status = !started
-    ? 'Kisah baru menantimu'
+    ? 'A new story awaits'
     : {
-        preparation: 'Waktunya persiapan',
-        open: store.paused ? 'Kafe dijeda' : 'Kafe sedang buka',
-        closing: 'Pesanan terakhir',
-        report: 'Hari yang penuh cerita',
+        preparation: 'Time to prepare',
+        open: store.paused ? 'Cafe paused' : 'Cafe is open',
+        closing: 'Last orders',
+        report: 'Cafe closed for the day',
       }[day.phase];
   const openPanel = (target: Panel) => {
     if (!store.started && target && target !== 'help' && target !== 'settings') store.start();
@@ -77,7 +79,7 @@ export default function App() {
             e.preventDefault();
             store.openPanel(null);
           }}
-          aria-label="NumBrew, beranda"
+          aria-label="NumBrew, home"
         >
           <span className="brand-icon">
             <img src="/icon.png" alt="" />
@@ -87,8 +89,8 @@ export default function App() {
             <small>BREW IDEAS, BLEND NUMBERS!</small>
           </span>
         </a>
-        <div className="sidebar-section">RUANG KERJAMU</div>
-        <nav aria-label="Navigasi utama">
+        <div className="sidebar-section">YOUR WORKSPACE</div>
+        <nav aria-label="Main navigation">
           {nav.map((item) => (
             <button
               className={`nav-item ${panel === item.panel ? 'selected' : ''}`}
@@ -101,56 +103,47 @@ export default function App() {
             </button>
           ))}
         </nav>
-        <div className="sidebar-section second">TEMAN BELAJAR</div>
+        <div className="sidebar-section second">LEARNING CORNER</div>
         <button className="nav-item" onClick={() => openPanel('help')}>
           <Icon name="book" />
-          <span>Panduan bermain</span>
+          <span>How to play</span>
           <Icon name="chevron" size={15} />
         </button>
         <div className="sidebar-bottom">
           <button className="nav-item" onClick={() => openPanel('settings')}>
             <Icon name="settings" />
-            <span>Pengaturan</span>
+            <span>Settings</span>
           </button>
-          <div className="owner-profile">
-            <div className="owner-avatar">K</div>
-            <div>
-              <strong>Pemilik kafe</strong>
-              <span>Perjalanan hari {day.number}</span>
-            </div>
-            <Icon name="leaf" size={18} />
-          </div>
         </div>
       </aside>
       <main className="main-content">
         <header className="page-header">
           <div>
             <div className="greeting">
-              <Icon name="sun" size={16} />{' '}
-              {active ? 'SELAMAT MELAYANI' : 'SELAMAT DATANG DI KAFEMU'}
+              <Icon name="sun" size={16} /> {active ? 'READY TO SERVE' : 'WELCOME TO YOUR CAFE'}
             </div>
             <h1>
               {!started
-                ? 'Cerita baik dimulai di sini.'
+                ? 'Good stories start here.'
                 : day.phase === 'report'
-                  ? 'Satu hari, banyak pelajaran.'
+                  ? 'One day, many lessons.'
                   : active
-                    ? 'Secangkir hangat, senyum baru.'
-                    : 'Hari baru, racikan baru.'}
+                    ? 'A warm cup, a new smile.'
+                    : 'A new day, a fresh brew.'}
             </h1>
             <p>
               {!started
-                ? 'Bangun kafe impianmu. Temukan matematika dalam setiap keputusan.'
-                : status + '. Pelan-pelan, kita tumbuh bersama.'}
+                ? 'Build your dream cafe. Discover math in every decision.'
+                : status + '. Growing together, one cup at a time.'}
             </p>
           </div>
           <div className="header-actions">
             <span className="day-pill">
-              <Icon name="sun" size={18} /> Hari {day.number}
+              <Icon name="sun" size={18} /> Day {day.number}
             </span>
             <button
               className="icon-button help-button"
-              aria-label="Buka panduan"
+              aria-label="Open guide"
               onClick={() => openPanel('help')}
             >
               <Icon name="help" size={22} />
@@ -161,67 +154,63 @@ export default function App() {
           <div className="notice status-warning" role="status">
             <span>
               {store.readOnly
-                ? 'Kafe sedang dibuka di tab lain. Tutup tab tersebut lalu muat ulang untuk bermain di sini.'
+                ? 'Your cafe is open in another tab. Close that tab and reload to play here.'
                 : store.warning}
             </span>
             <button className="text-button" onClick={() => openPanel('settings')}>
-              Pengaturan
+              Settings
             </button>
           </div>
         )}
-        <section className="stats-grid" aria-label="Ringkasan kafe">
+        <section className="stats-grid" aria-label="Cafe overview">
           <Stat
             icon="wallet"
-            label="Kas kafe"
+            label="Cafe cash"
             value={money(session.cash)}
             note={
               started && active
-                ? `${money(day.operatingCost)} dicadangkan untuk operasional`
-                : 'Modal untuk cerita berikutnya'
+                ? `${money(day.operatingCost)} reserved for operating costs`
+                : 'Funds for your next chapter'
             }
             color="green"
           />
           <Stat
             icon="package"
-            label="Nilai persediaan"
+            label="Inventory value"
             value={money(inventoryValue(session.inventory))}
-            note="Bahan tersisa, peluang tersimpan"
+            note="Ingredients in stock, opportunities ahead"
             color="gold"
           />
           <Stat
             icon="users"
-            label="Pelanggan hari ini"
+            label="Customers today"
             value={`${day.receipts.length}`}
-            note="Senyum yang sudah dilayani"
+            note="Happy customers served"
             color="rose"
           />
           <Stat
             icon="star"
-            label="Reputasi kafe"
+            label="Cafe reputation"
             value={`${session.reputation} / 100`}
             note={
               session.reputation >= 75
-                ? 'Mulai jadi favorit'
+                ? 'Becoming a favorite'
                 : session.reputation >= 60
-                  ? 'Semakin dikenal'
-                  : 'Pendatang baru yang hangat'
+                  ? 'Getting noticed'
+                  : 'A welcoming newcomer'
             }
             color="sage"
           />
         </section>
         <div className={`workspace-grid ${started && active ? 'serving-workspace' : ''}`}>
           <div className="cafe-column">
-            <section className="cafe-card" aria-label="Kafe interaktif">
+            <section className="cafe-card" aria-label="Interactive cafe">
               <div className="cafe-topline">
                 <div>
                   <span className={`status-dot ${active && !store.paused ? 'live' : ''}`} />
-                  <strong>
-                    {active
-                      ? 'Pintu terbuka, cerita mengalir'
-                      : day.phase === 'report'
-                        ? 'Sampai jumpa esok hari'
-                        : 'Sudut hangat milikmu'}
-                  </strong>
+                  {(active || day.phase === 'report') && (
+                    <strong>{active ? 'Open doors, shared stories' : 'See you tomorrow'}</strong>
+                  )}
                 </div>
                 <span>
                   <Icon name="clock" size={14} /> {gameTime(day.elapsed, day.duration)}
@@ -233,24 +222,24 @@ export default function App() {
                   <Icon name={active ? 'coffee' : 'leaf'} size={14} />
                   {active
                     ? day.phase === 'closing'
-                      ? 'PESANAN TERAKHIR'
-                      : 'KAFE BUKA'
+                      ? 'LAST ORDERS'
+                      : 'CAFE OPEN'
                     : day.phase === 'report'
-                      ? 'SAMPAI BESOK'
-                      : 'SEBELUM CERITA DIMULAI'}
+                      ? 'SEE YOU TOMORROW'
+                      : 'BEFORE THE STORY BEGINS'}
                 </div>
                 {started && active && <CustomerBubbles />}
                 {started && active && store.paused && (
                   <div className="paused-overlay">
                     <span>
-                      <Icon name="pause" /> Waktu sedang dijeda
+                      <Icon name="pause" /> Time is paused
                     </span>
                     <button
                       className="button primary"
                       disabled={store.saveStatus === 'failed' || store.readOnly}
                       onClick={store.togglePause}
                     >
-                      <Icon name="play" size={17} /> Lanjutkan
+                      <Icon name="play" size={17} /> Resume
                     </button>
                   </div>
                 )}
@@ -266,12 +255,12 @@ export default function App() {
                   <strong>{status}</strong>
                   <span>
                     {active
-                      ? `${day.customers.length} pesanan menunggu · ${Math.max(0, (day.phase === 'closing' ? day.closeAt : day.duration) - day.elapsed)} detik tersisa`
+                      ? `${day.customers.length} orders waiting · ${Math.max(0, (day.phase === 'closing' ? day.closeAt : day.duration) - day.elapsed)} seconds remaining`
                       : day.phase === 'report'
                         ? profitVerified
-                          ? `Hasil usaha hari ini: ${money(report.profit)}`
-                          : 'Hitung laba / rugi bersihmu di laporan hari ini.'
-                        : 'Siapkan bahan dan harga, lalu sambut pelanggan pertamamu.'}
+                          ? `Business result today: ${money(report.profit)}`
+                          : 'View your report to see how your cafe performed.'
+                        : 'Prepare ingredients and prices, then welcome your first customer.'}
                   </span>
                 </div>
                 {started && day.phase === 'preparation' && (
@@ -280,14 +269,14 @@ export default function App() {
                     disabled={!canOpen || store.readOnly || store.saveStatus === 'failed'}
                     onClick={() => store.dispatch({ type: 'open' })}
                   >
-                    <Icon name="play" size={17} /> Buka kafe
+                    <Icon name="play" size={17} /> Open cafe
                   </button>
                 )}
                 {started && active && (
                   <div className="button-row">
                     <button
                       className="icon-button pause-control"
-                      aria-label={store.paused ? 'Lanjutkan kafe' : 'Jeda kafe'}
+                      aria-label={store.paused ? 'Resume cafe' : 'Pause cafe'}
                       disabled={store.readOnly || store.saveStatus === 'failed'}
                       onClick={store.togglePause}
                     >
@@ -300,13 +289,13 @@ export default function App() {
                         store.dispatch({ type: day.phase === 'open' ? 'close' : 'finish' })
                       }
                     >
-                      {day.phase === 'open' ? 'Tutup kafe' : 'Selesaikan hari'}
+                      {day.phase === 'open' ? 'Close cafe' : 'Finish day'}
                     </button>
                   </div>
                 )}
                 {started && day.phase === 'report' && (
                   <button className="button primary" onClick={() => openPanel('report')}>
-                    Lihat laporan
+                    View report
                     <Icon name="arrowRight" size={17} />
                   </button>
                 )}
@@ -325,101 +314,101 @@ export default function App() {
           <aside className={`day-panel ${started && active ? 'serving-panel' : ''}`}>
             {!started ? (
               <>
-                <span className="eyebrow">
-                  {store.session ? 'CERITAMU BERLANJUT' : 'BAB PERTAMA'}
-                </span>
+                <span className="eyebrow">{store.session ? 'SAVED PROGRESS' : 'CHAPTER ONE'}</span>
                 <h2>
-                  Kafe kecil, <br />
-                  mimpi besar.
+                  {store.session ? (
+                    'Continue your cafe'
+                  ) : (
+                    <>
+                      Small cafe, <br />
+                      big dreams.
+                    </>
+                  )}
                 </h2>
                 <p>
                   {store.session
-                    ? `Usahamu tersimpan di hari ${day.number}. Kembali meracik cerita berikutnya.`
-                    : 'Modal sudah siap. Sekarang giliranmu meracik usaha yang punya cerita.'}
+                    ? `Your cafe is saved for day ${day.number}.`
+                    : 'Your starting funds are ready. Now brew a business with a story of its own.'}
                 </p>
                 <div className="starting-capital">
-                  <span>{store.session ? 'Kas tersimpan' : 'Modal awalmu'}</span>
+                  <span>{store.session ? 'Saved cash' : 'Your starting capital'}</span>
                   <strong>{money(session.cash)}</strong>
                   <Icon name="coins" size={32} />
                 </div>
-                <ul className="welcome-list">
-                  <li>
-                    <Icon name="check" size={16} /> Belanja dan kelola bahan
-                  </li>
-                  <li>
-                    <Icon name="check" size={16} /> Tentukan harga terbaikmu
-                  </li>
-                  <li>
-                    <Icon name="check" size={16} /> Belajar dari hasil usahamu
-                  </li>
-                </ul>
+                {!store.session && (
+                  <ul className="welcome-list">
+                    <li>
+                      <Icon name="check" size={16} /> Buy and manage ingredients
+                    </li>
+                    <li>
+                      <Icon name="check" size={16} /> Set your prices
+                    </li>
+                    <li>
+                      <Icon name="check" size={16} /> Learn from your results
+                    </li>
+                  </ul>
+                )}
                 <button
                   className="button primary full"
                   disabled={store.readOnly}
                   onClick={() => store.start()}
                 >
-                  {store.session ? 'Lanjutkan usahamu' : 'Mulai usaha'}
+                  {store.session ? 'Continue your cafe' : 'Start your cafe'}
                   <Icon name="arrowRight" size={18} />
                 </button>
                 <small className="welcome-footnote">
-                  Santai. Tidak ada kuis, hanya keputusanmu.
+                  Take your time. Learn through the choices you make.
                 </small>
               </>
             ) : active ? (
               <ServiceCounter />
             ) : day.phase === 'report' ? (
               <>
-                <span className="eyebrow">CATATAN PENUTUP</span>
-                <h2>
-                  Hari ini, <br />
-                  kamu bertumbuh.
-                </h2>
-                <p>Setiap hasil menyimpan pelajaran untuk racikan berikutnya.</p>
+                <h2>Daily summary</h2>
                 <div
                   className={`day-result ${profitVerified && report.profit < 0 ? 'negative' : ''}`}
                 >
-                  <span>
-                    {profitVerified
-                      ? report.profit < 0
-                        ? 'Rugi bersih'
-                        : 'Laba bersih'
-                      : 'Laba / rugi bersih'}
-                  </span>
-                  <strong>{profitVerified ? money(report.profit) : 'Hitung hasilmu'}</strong>
-                  <small>{report.customers} pelanggan telah dilayani</small>
+                  {profitVerified && (
+                    <>
+                      <span>{report.profit < 0 ? 'Net loss' : 'Net profit'}</span>
+                      <strong>{money(report.profit)}</strong>
+                    </>
+                  )}
+                  <small>Customers served: {report.customers}</small>
                 </div>
                 <button className="button primary full" onClick={() => openPanel('report')}>
-                  Buka laporan
+                  Open report
                   <Icon name="arrowRight" size={18} />
                 </button>
               </>
             ) : (
               <>
-                <span className="eyebrow">SEBELUM BUKA</span>
-                <h2>
-                  Racik rencana <br />
-                  hari ini.
-                </h2>
-                <p>Tiga hal kecil untuk awal yang baik.</p>
+                <h2>Prepare for today</h2>
+                <p>
+                  Stock your shelves, set prices &amp; menu items, read the guide, then open your
+                  cafe!
+                </p>
                 <div className="checklist">
                   <Checklist
                     done={ready}
-                    title="Isi rak bahan"
+                    title="Stock your shelves"
                     description={
-                      ready ? 'Bahan untuk meracik sudah tersedia' : 'Belanja bahan dari supplier'
+                      ready
+                        ? 'Ingredients are ready for your drinks'
+                        : 'Buy ingredients from the supplier'
                     }
                     onClick={() => openPanel('supplier')}
                   />
                   <Checklist
                     done={activeMenu > 0}
-                    title="Siapkan menu & harga"
-                    description={`${activeMenu} menu aktif · tinjau HPP-nya`}
+                    title="Prepare menu & prices"
+                    description={`${activeMenu} active menu items · review their COGS`}
                     onClick={() => openPanel('pricing')}
                   />
                   <Checklist
                     done={session.cash >= day.operatingCost}
-                    title="Sisihkan operasional"
-                    description={`${money(day.operatingCost)} per hari buka`}
+                    title="Guide"
+                    description="Learn how to manage your cafe."
                     onClick={() => openPanel('help')}
                   />
                 </div>
@@ -428,10 +417,10 @@ export default function App() {
                   onClick={() => openPanel(ready ? 'pricing' : 'supplier')}
                 >
                   <Icon name={ready ? 'coffee' : 'basket'} size={17} />
-                  {ready ? 'Tinjau menu & harga' : 'Yuk, belanja bahan'}
+                  {ready ? 'Review menu & prices' : 'Shop for ingredients'}
                 </button>
                 <small className="welcome-footnote">
-                  Persiapan bebas waktu. Pikirkan baik-baik.
+                  No time limit during preparation. Think it through.
                 </small>
               </>
             )}
@@ -441,18 +430,17 @@ export default function App() {
           <div className="section-heading">
             <div>
               <h2>
-                Menu hari ini<span className="count-badge">3 racikan</span>
+                Today on the menu<span className="count-badge">3 drinks</span>
               </h2>
-              <p>Dari bahan sederhana, jadi sesuatu yang istimewa.</p>
+              <p>Turn simple ingredients into something special.</p>
             </div>
             <button className="text-button" onClick={() => openPanel('pricing')}>
-              Atur menu & harga <Icon name="arrowRight" size={17} />
+              Manage menu & prices <Icon name="arrowRight" size={17} />
             </button>
           </div>
           <div className="product-grid">
             {productIds.map((id) => {
               const item = PRODUCTS[id];
-              const cost = recipeCost(session.inventory, id);
               const portions = capacity(session.inventory, id);
               return (
                 <article className="product-card" key={id}>
@@ -460,66 +448,60 @@ export default function App() {
                     <ProductArt id={id} />
                     <span className={`product-stock ${portions ? 'available' : ''}`}>
                       {!session.menu[id].active
-                        ? 'Menu nonaktif'
+                        ? 'Item disabled'
                         : portions
-                          ? `${portions} porsi tersedia`
-                          : 'Perlu bahan'}
+                          ? `${portions} servings available`
+                          : 'Needs ingredients'}
                     </span>
                   </div>
                   <div className="product-info">
                     <h3>{item.name}</h3>
                     <p>{item.description}</p>
                     <div className="product-price">
-                      <strong>{money(session.menu[id].price)}</strong>
-                      <span>
-                        HPP{' '}
-                        <b>
-                          {session.day.phase === 'preparation' && !hasCalculatedHpp(session, id)
-                            ? 'Hitung di Menu & harga'
-                            : money(cost.hpp)}
-                        </b>
-                      </span>
+                      <strong>{money(quotePrice(session.menu[id]).net)}</strong>
                     </div>
+                    {!!session.menu[id].discountPercent && (
+                      <small className="promo-label">
+                        Discount {session.menu[id].discountPercent}% · from{' '}
+                        {money(session.menu[id].price)}
+                      </small>
+                    )}
                   </div>
                 </article>
               );
             })}
           </div>
         </section>
-        <div className="bottom-note">
-          <span className="round-icon">
-            <Icon name="book" size={19} />
-          </span>
-          <div>
-            <strong>
-              {store.lastReceipt ? 'Satu transaksi, satu pelajaran baru.' : 'Tahukah kamu?'}
-            </strong>
-            <p>
-              {store.lastReceipt
-                ? `Penjualan terakhirmu menghasilkan ${money(store.lastReceipt.price - store.lastReceipt.hpp)} sebelum biaya operasional.`
-                : 'Uang yang dibelanjakan untuk bahan belum tentu menjadi biaya hari ini. Stok yang tersisa masih punya nilai.'}
-            </p>
+        {!store.lastReceipt && (
+          <div className="bottom-note">
+            <span className="round-icon">
+              <Icon name="book" size={19} />
+            </span>
+            <div>
+              <strong>Did you know?</strong>
+              <p>
+                Money spent on ingredients is not necessarily an expense today. Unsold stock still
+                has value.
+              </p>
+            </div>
+            <button className="text-button" onClick={() => openPanel('help')}>
+              Learn more
+              <Icon name="arrowRight" size={16} />
+            </button>
           </div>
-          <button
-            className="text-button"
-            onClick={() => openPanel(store.lastReceipt ? 'calculation' : 'help')}
-          >
-            {store.lastReceipt ? 'Lihat Perhitungan' : 'Pelajari lebih lanjut'}
-            <Icon name="arrowRight" size={16} />
-          </button>
-        </div>
+        )}
         <footer className="page-footer">
           <div className="mobile-tools">
             <button
               className="icon-button"
-              aria-label="Buka pengaturan"
+              aria-label="Open settings"
               onClick={() => openPanel('settings')}
             >
               <Icon name="settings" size={19} />
             </button>
             <button
               className="icon-button"
-              aria-label="Bantuan bermain"
+              aria-label="Game help"
               onClick={() => openPanel('help')}
             >
               <Icon name="book" size={19} />
@@ -535,7 +517,7 @@ export default function App() {
           <Icon name={toast.error ? 'help' : 'check'} size={20} />
           <span>{toast.text}</span>
           <button
-            aria-label="Tutup pemberitahuan"
+            aria-label="Dismiss notification"
             onClick={() => gameStore.setState({ toast: null })}
           >
             <Icon name="x" size={16} />
@@ -547,13 +529,13 @@ export default function App() {
           title={panels[panel].title}
           eyebrow={panels[panel].eyebrow}
           onClose={() => store.openPanel(null)}
-          wide={panel === 'pricing' || panel === 'supplier'}
+          wide={panel === 'pricing' || panel === 'supplier' || panel === 'promotion'}
         >
           {panel === 'supplier' && store.session && <SupplierPanel />}
           {panel === 'inventory' && store.session && <InventoryPanel />}
           {panel === 'pricing' && store.session && <PricingPanel />}
+          {panel === 'promotion' && store.session && <PromotionPanel />}
           {panel === 'report' && store.session && <ReportPanel />}
-          {panel === 'calculation' && <ReceiptCalculation />}
           {panel === 'help' && <HelpPanel />}
           {panel === 'settings' && <SettingsPanel />}
         </Modal>

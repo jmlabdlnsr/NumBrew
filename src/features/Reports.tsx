@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useStore } from 'zustand';
-import { INGREDIENTS, PRODUCTS } from '../data/catalog';
+import { PRODUCTS } from '../data/catalog';
 import { buildReport } from '../domain/reports/report';
 import {
   hasCalculatedProfit,
@@ -16,40 +16,46 @@ import type { Report } from '../domain/types';
 function Breakdown({ report, verified }: { report: Report; verified: boolean }) {
   return (
     <div className="report-calculation">
-      <span className="eyebrow">DARI KEPUTUSAN KE PERHITUNGAN</span>
-      <h3>Ke mana uang kafemu pergi?</h3>
+      <span className="eyebrow">FROM DECISIONS TO CALCULATIONS</span>
+      <h3>Where did your cafe money go?</h3>
       <div className="formula">
-        <span>Pendapatan bersih</span>
+        <span>Gross sales</span>
+        <b>{money(report.revenue)}</b>
+        <span>− Discount</span>
+        <b>{money(report.discount)}</b>
+        <span>Net revenue</span>
         <b>{money(report.netRevenue)}</b>
-        <span>− HPP bahan terjual</span>
+        <span>− Cost of goods sold</span>
         <b>{money(report.hpp)}</b>
-        <span>− Biaya operasional</span>
+        <span>− Operating costs</span>
         <b>{money(report.operating)}</b>
-        <span>− Pajak simulasi</span>
+        <span>− Simulated tax</span>
         <b>{money(report.tax)}</b>
-        <span className="total">= Laba / rugi bersih</span>
-        <b className="total">{verified ? money(report.profit) : 'Hitung hasilmu'}</b>
+        <span className="total">= Net profit / loss</span>
+        <b className="total">{verified ? money(report.profit) : 'Calculate your result'}</b>
       </div>
       <p>
-        Persentase hasil usaha = laba bersih ÷ (HPP + biaya operasional + pajak) × 100% ={' '}
-        <strong>{verified ? percent(report.profitPct) : 'tampil setelah hasilmu diperiksa'}</strong>
-        . Dasarnya adalah biaya, bukan pendapatan.
+        Profit percentage = net profit ÷ (COGS + operating costs + tax) × 100% ={' '}
+        <strong>
+          {verified ? percent(report.profitPct) : 'shown after your answer is checked'}
+        </strong>
+        . The denominator is costs, not revenue.
       </p>
       <div className="learning-note">
         <Icon name="book" />
         <p>
-          Pembelian bahan belum seluruhnya menjadi biaya. Bahan yang belum terjual masih menjadi
-          persediaan bernilai <strong>{money(report.inventoryValue)}</strong>.
+          Not all ingredient purchases become expenses. Unsold ingredients remain inventory worth{' '}
+          <strong>{money(report.inventoryValue)}</strong>.
         </p>
       </div>
-      <h4>Rekonsiliasi kas</h4>
+      <h4>Cash reconciliation</h4>
       <p>
         {money(report.cashStart)} − {money(report.purchases)} + {money(report.netRevenue)} −{' '}
         {money(report.operating)} − {money(report.tax)} = <strong>{money(report.cashEnd)}</strong>
       </p>
       <small>
-        Kas awal − pembelian + penjualan − operasional − pajak. Laporan berjalan belum membayar
-        operasional; angka kas setelah tutup bersifat proyeksi sampai hari diselesaikan.
+        Opening cash − purchases + net sales − operating costs − tax. Operating costs have not yet
+        been paid in a live report; closing cash is projected until the day ends.
       </small>
     </div>
   );
@@ -84,7 +90,7 @@ function ReportForDay({ day, setDay }: { day: number; setDay: (day: number) => v
       return;
     }
     if (finalized && !store.dispatch({ type: 'calculate_profit', day, answer: parsed! })) {
-      setFeedback('Hasil belum tersimpan. Periksa status penyimpanan lalu coba lagi.');
+      setFeedback('Your result has not been saved. Check the save status and try again.');
       return;
     }
     setFeedback('');
@@ -95,21 +101,21 @@ function ReportForDay({ day, setDay }: { day: number; setDay: (day: number) => v
     ? report
     : { ...report, cashEnd: report.cashEnd - report.operating - report.tax };
   const rows = [
-    ['Penjualan kotor', report.revenue],
-    ['Diskon · belum aktif', -report.discount],
-    ['Pendapatan bersih', report.netRevenue],
-    ['HPP bahan terjual', -report.hpp],
-    ['Biaya operasional', -report.operating],
-    ['Pajak · belum aktif', -report.tax],
+    ['Gross sales', report.revenue],
+    ['Discount', -report.discount],
+    ['Net revenue', report.netRevenue],
+    ['Cost of goods sold', -report.hpp],
+    ['Operating costs', -report.operating],
+    ['Tax · not yet enabled', -report.tax],
   ] as const;
   return (
     <>
       <div className="report-selector">
-        <span className="tag green">{finalized ? 'Hari selesai' : 'Laporan berjalan'}</span>
+        <span className="tag green">{finalized ? 'Day complete' : 'Live report'}</span>
         <label>
-          Hari{' '}
+          Day{' '}
           <select
-            aria-label="Pilih laporan hari"
+            aria-label="Select report day"
             value={day}
             onChange={(e) => setDay(Number(e.target.value))}
           >
@@ -124,27 +130,19 @@ function ReportForDay({ day, setDay }: { day: number; setDay: (day: number) => v
         </label>
       </div>
       <div className={`profit-hero ${verified && report.profit < 0 ? 'loss' : ''}`}>
-        <span>
-          {!verified
-            ? 'Dari keputusanmu, temukan hasil usahamu'
-            : report.profit < 0
-              ? 'Ada pelajaran untuk esok hari'
-              : report.profit > 0
-                ? 'Secangkir usaha, hasil yang terasa'
-                : 'Setiap cerita dimulai dari nol'}
-        </span>
-        <h2>{verified ? money(report.profit) : 'Berapa hasil usahamu?'}</h2>
+        {verified && report.profit === 0 && <span>Every story starts at zero</span>}
+        <h2>{verified ? money(report.profit) : 'How did your cafe do?'}</h2>
         <p>
           {verified
-            ? `${report.profit < 0 ? 'Rugi bersih' : report.profit === 0 ? 'Impas' : 'Laba bersih'} · ${percent(report.profitPct)} atas biaya`
-            : 'Gunakan rincian di bawah untuk menghitung laba atau rugi bersih.'}
+            ? `${report.profit < 0 ? 'Net loss' : report.profit === 0 ? 'Break-even' : 'Net profit'} · ${percent(report.profitPct)} of total costs`
+            : 'Use the breakdown below to calculate your net profit or loss.'}
         </p>
       </div>
       <div className="report-metrics">
         <div>
           <Icon name="users" />
           <strong>{report.customers}</strong>
-          <span>Pelanggan membeli</span>
+          <span>Customers served</span>
         </div>
         <div>
           <Icon name="star" />
@@ -152,12 +150,12 @@ function ReportForDay({ day, setDay }: { day: number; setDay: (day: number) => v
             {report.reputationChange > 0 ? '+' : ''}
             {report.reputationChange}
           </strong>
-          <span>Perubahan reputasi</span>
+          <span>Reputation change</span>
         </div>
         <div>
           <Icon name="store" />
           <strong>{report.visitors}</strong>
-          <span>Total pengunjung</span>
+          <span>Total visitors</span>
         </div>
       </div>
       <div className="report-lines">
@@ -168,26 +166,26 @@ function ReportForDay({ day, setDay }: { day: number; setDay: (day: number) => v
           </div>
         ))}
         <div className="simple-row total">
-          <span>Laba / rugi bersih</span>
-          <strong>{verified ? money(report.profit) : 'Isi hasil hitunganmu'}</strong>
+          <span>Net profit / loss</span>
+          <strong>{verified ? money(report.profit) : 'Enter your calculated result'}</strong>
         </div>
       </div>
-      <section className="profit-worksheet" aria-label="Panduan menghitung laba atau rugi">
+      <section className="profit-worksheet" aria-label="Profit and loss calculation guide">
         <h3>
-          <Icon name="calculator" size={18} /> Cara menghitung
+          <Icon name="calculator" size={18} /> How to calculate
         </h3>
         <ol>
-          <li>Pendapatan bersih = penjualan kotor − diskon.</li>
-          <li>Total biaya = HPP bahan terjual + biaya operasional + pajak.</li>
-          <li>Laba / rugi bersih = pendapatan bersih − total biaya.</li>
+          <li>Net revenue = gross sales − discounts.</li>
+          <li>Total costs = cost of goods sold + operating costs + tax.</li>
+          <li>Net profit / loss = net revenue − total costs.</li>
         </ol>
         <p className="profit-equation">
           {money(report.netRevenue)} − ({money(report.hpp)} + {money(report.operating)} +{' '}
           {money(report.tax)}) = <strong>{verified ? money(report.profit) : '?'}</strong>
         </p>
         <p>
-          Hasil positif berarti laba, negatif berarti rugi, dan 0 berarti impas. Gunakan HPP bahan
-          yang terjual, bukan seluruh pembelian stok.
+          A positive result means profit, a negative result means loss, and 0 means break-even. Use
+          the cost of ingredients sold, not all stock purchases.
         </p>
       </section>
       <form
@@ -198,20 +196,20 @@ function ReportForDay({ day, setDay }: { day: number; setDay: (day: number) => v
         }}
       >
         <label htmlFor="profit-answer" className="field-label">
-          Hitung laba / rugi bersih · Hari {day}
+          Calculate net profit / loss · Day {day}
         </label>
         <div className="hpp-answer-row">
           <div className="money-input">
             <span>Rp</span>
             <input
               id="profit-answer"
-              aria-label="Hasil laba atau rugi bersih"
-              aria-describedby="profit-feedback profit-input-hint"
+              aria-label="Net profit or loss answer"
+              aria-describedby="profit-feedback"
               aria-invalid={!!feedback}
               type="text"
               inputMode="text"
               autoComplete="off"
-              placeholder="Isi hasil, pakai minus jika rugi"
+              placeholder="Enter your result, negative for a loss"
               value={answer}
               disabled={blocked}
               onChange={(e) => {
@@ -227,24 +225,20 @@ function ReportForDay({ day, setDay }: { day: number; setDay: (day: number) => v
             disabled={blocked || !answer.trim() || verified}
           >
             <Icon name={verified ? 'check' : 'calculator'} size={16} />{' '}
-            {verified ? 'Hasil terverifikasi' : 'Periksa hasil'}
+            {verified ? 'Result verified' : 'Check answer'}
           </button>
         </div>
-        <p id="profit-input-hint" className="hpp-feedback">
-          Gunakan angka bulat, misalnya 5000 untuk laba, -5000 untuk rugi, atau 0 untuk impas. Salah
-          hitung tidak mengurangi uang atau reputasi.
-        </p>
         <p id="profit-feedback" role="status" className={feedback ? 'error-text' : 'hpp-feedback'}>
           {feedback ||
             (verified
               ? finalized
-                ? 'Tepat! Hasil perhitunganmu tersimpan untuk hari ini.'
-                : 'Tepat untuk laporan berjalan ini. Hitung kembali setelah hari selesai karena hasil masih dapat berubah.'
-              : 'Jumlahkan biaya, lalu kurangi dari pendapatan bersih. Hasil akhirnya diisi olehmu.')}
+                ? 'Correct! Your calculation has been saved for this day.'
+                : 'Correct for this live report. Calculate again after closing, as the figures may still change.'
+              : 'Add the costs, then subtract them from net revenue. You enter the final answer.')}
         </p>
         {!finalized && (
           <p className="hpp-feedback">
-            Laporan ini masih berupa proyeksi. Hasil akhir disimpan setelah kafe tutup.
+            This report is still a forecast. Final results are saved after the cafe closes.
           </p>
         )}
       </form>
@@ -253,43 +247,49 @@ function ReportForDay({ day, setDay }: { day: number; setDay: (day: number) => v
         onClick={() => setDetail(!detail)}
         aria-expanded={detail}
       >
-        <Icon name="calculator" /> {detail ? 'Tutup perhitungan' : 'Lihat Perhitungan'}
+        <Icon name="calculator" /> {detail ? 'Hide calculation' : 'View Calculation'}
       </button>
       {detail && <Breakdown report={adjusted} verified={verified} />}
       <div className="report-advice">
         <Icon name="sprout" />
         <div>
-          <strong>Catatan untuk hari berikutnya</strong>
+          <strong>Notes for the next day</strong>
           <p>
             {!verified
-              ? 'Hitung hasil bersihmu, lalu bandingkan pendapatan dan biaya untuk merencanakan hari berikutnya.'
+              ? 'Calculate your net result, then compare revenue and costs to plan for the next day.'
               : report.profit < 0
-                ? 'Untung per cup belum tentu menutup biaya harian. Tinjau harga, volume penjualan, dan bahan yang paling cepat habis.'
+                ? 'Profit per cup may not cover daily costs. Review prices, sales volume, and ingredients that run out fastest.'
                 : report.customers === 0
-                  ? 'Mulai dari bahan secukupnya, pilih harga, lalu amati pelangganmu.'
-                  : 'Pertahankan menu favorit dan cek stok susu serta cup sebelum membuka kafe lagi.'}
+                  ? 'Start with enough ingredients, set prices, then observe your customers.'
+                  : 'Keep popular drinks on the menu and check milk and cup stock before opening again.'}
           </p>
         </div>
       </div>
       <details className="receipt-list">
-        <summary>Riwayat transaksi · {report.customers} penjualan</summary>
+        <summary>Transaction history · {report.customers} sales</summary>
         {report.receipts.length ? (
           report.receipts.map((r) => (
             <div className="simple-row" key={r.id}>
               <span>
                 {r.customer}
                 <small>
-                  {PRODUCTS[r.product].name} · HPP {money(r.hpp)}
+                  {PRODUCTS[r.product].name} · COGS {money(r.hpp)}
                 </small>
+                {r.discount > 0 && (
+                  <small>
+                    Regular price {money(r.price)} − discount {r.discountPercent}% (
+                    {money(r.discount)}) = {money(r.price - r.discount)}
+                  </small>
+                )}
               </span>
-              <strong>{money(r.price)}</strong>
+              <strong>{money(r.price - r.discount)}</strong>
             </div>
           ))
         ) : (
           <p className="muted">
             {report.customers
-              ? 'Rincian hari ini telah diarsipkan. Ringkasan tetap tersedia.'
-              : 'Belum ada transaksi pada hari ini.'}
+              ? 'The details for this day have been archived. The summary is still available.'
+              : 'No transactions yet for this day.'}
           </p>
         )}
       </details>
@@ -298,57 +298,10 @@ function ReportForDay({ day, setDay }: { day: number; setDay: (day: number) => v
           className="button primary full next-day"
           onClick={() => gameStore.getState().dispatch({ type: 'next' })}
         >
-          Siapkan hari {session.day.number + 1}
+          Prepare for day {session.day.number + 1}
           <Icon name="arrowRight" size={18} />
         </button>
       )}
-    </>
-  );
-}
-
-export function ReceiptCalculation() {
-  const receipt = useStore(gameStore, (s) => s.lastReceipt);
-  if (!receipt) return <p>Layani pelanggan pertama untuk melihat perhitungan transaksi.</p>;
-  return (
-    <>
-      <div className="receipt-heading">
-        <span className="round-icon">
-          <Icon name="coffee" />
-        </span>
-        <h3>{PRODUCTS[receipt.product].name}</h3>
-        <p>
-          Disajikan untuk {receipt.customer} · Hari {receipt.day}
-        </p>
-      </div>
-      {receipt.lines.map((l) => (
-        <div className="simple-row" key={l.ingredient}>
-          <span>
-            {INGREDIENTS[l.ingredient].name}
-            <small>
-              {l.quantity} {INGREDIENTS[l.ingredient].unit}
-            </small>
-          </span>
-          <strong>{money(l.cost)}</strong>
-        </div>
-      ))}
-      <div className="simple-row total">
-        <span>HPP aktual</span>
-        <strong>{money(receipt.hpp)}</strong>
-      </div>
-      <div className="formula-banner">
-        <span>
-          {money(receipt.price)} − {money(receipt.hpp)}
-        </span>
-        <strong>= {money(receipt.price - receipt.hpp)}</strong>
-        <small>Harga jual − HPP = untung / rugi kotor</small>
-      </div>
-      <div className="learning-note">
-        <Icon name="book" />
-        <p>
-          HPP dihitung dari bahan yang benar-benar dipakai, mulai dari batch pembelian terdahulu.
-          Keuntungan ini belum dikurangi biaya operasional harian.
-        </p>
-      </div>
     </>
   );
 }

@@ -86,7 +86,7 @@ function storage(): StoragePort {
   };
 }
 
-describe('integer Rupiah and HPP', () => {
+describe('integer Rupiah and COGS', () => {
   it('computes the approved recipes', () => {
     expect(productIds.map((id) => recipeCost(emptyInventory(), id).hpp)).toEqual([
       6300, 6300, 6000,
@@ -152,7 +152,7 @@ describe('preparation and atomic transactions', () => {
       expect(r.state).toBe(s);
     },
   );
-  it('allows deliberate below-HPP prices but rejects invalid ones', () => {
+  it('allows deliberate below-COGS prices but rejects invalid ones', () => {
     const calculated = act(stocked(), {
       type: 'calculate_hpp',
       product: 'matcha-latte',
@@ -320,7 +320,7 @@ describe('save recovery', () => {
     port.setItem(SAVE_KEY, '{damaged');
     const r = readSave(port);
     expect(r.data?.session.cash).toBe(500000);
-    expect(r.warning).toContain('Cadangan');
+    expect(r.warning).toContain('backup');
   });
   it('rejects unknown versions, invalid references and contradictory cash', () => {
     const valid = envelope(stocked());

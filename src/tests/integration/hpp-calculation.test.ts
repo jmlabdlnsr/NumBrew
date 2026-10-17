@@ -9,7 +9,7 @@ function stocked() {
   return dispatchCommand(createSession(123, 'hpp-test'), { type: 'buy', cart: STARTER_CART }).state;
 }
 
-describe('player-calculated HPP', () => {
+describe('player-calculated COGS', () => {
   it.each([
     ['6300', 6300],
     ['6.300', 6300],

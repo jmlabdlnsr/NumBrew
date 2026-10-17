@@ -18,12 +18,13 @@ import type { Customer } from '../domain/types';
 import { gameStore } from '../store/gameStore';
 import { Icon } from '../components/Icon';
 import { money } from '../utils/format';
+import { quotePrice } from '../domain/promotion/promotion';
 
 const stages = {
-  greeting: 'Minta rekomendasi',
-  ordered: 'Pesanan diterima',
-  preparing: 'Sedang diracik',
-  ready: 'Siap diserahkan',
+  greeting: 'Wants a recommendation',
+  ordered: 'Order accepted',
+  preparing: 'Preparing drink',
+  ready: 'Ready to serve',
 };
 
 export function CounterMenu() {
@@ -31,23 +32,24 @@ export function CounterMenu() {
   return (
     <section className="counter-menu">
       <div>
-        <span className="eyebrow">PAPAN MENU</span>
-        <span>Harga yang kamu tawarkan</span>
+        <span className="eyebrow">MENU BOARD</span>
+        <span>The prices you offer</span>
       </div>
       <div className="counter-menu-grid">
         {productIds.map((id) => (
           <article key={id}>
             <img src={`/assets/products/${id}.svg`} alt="" />
             <strong>{PRODUCTS[id].name}</strong>
-            <b>{money(session.menu[id].price)}</b>
-            <small>HPP {money(recipeCost(session.inventory, id).hpp)}</small>
+            <b>{money(quotePrice(session.menu[id]).net)}</b>
+            {!!session.menu[id].discountPercent && (
+              <small className="promo-label">
+                Discount {session.menu[id].discountPercent}% · from {money(session.menu[id].price)}
+              </small>
+            )}
+            <small>COGS {money(recipeCost(session.inventory, id).hpp)}</small>
           </article>
         ))}
       </div>
-      <p>
-        <Icon name="book" size={15} />
-        Kenali selera untuk bonus reputasi. Jaga selisih harga dan HPP untuk hasil usahamu.
-      </p>
     </section>
   );
 }
@@ -75,7 +77,7 @@ export function CustomerBubbles() {
         <button
           className="service-scene-bubble"
           onClick={() => selectCustomer(customer.id)}
-          aria-label={`Ngobrol dengan ${customer.name} di kafe`}
+          aria-label={`Talk to ${customer.name} in the cafe`}
         >
           <span className="bubble-person">
             <Icon name="chat" size={13} />
@@ -86,7 +88,7 @@ export function CustomerBubbles() {
       ) : (
         lastReaction && (
           <div className="service-scene-bubble farewell">
-            <span className="bubble-person">{lastReaction.name} pamit</span>
+            <span className="bubble-person">{lastReaction.name} says goodbye</span>
             <span className="bubble-speech">“{lastReaction.line}”</span>
           </div>
         )
@@ -96,7 +98,7 @@ export function CustomerBubbles() {
           <button
             key={c.id}
             onClick={() => selectCustomer(c.id)}
-            aria-label={`Pilih ${c.name} di antrean`}
+            aria-label={`Select ${c.name} in the queue`}
           >
             <Icon name={c.service.stage === 'ready' ? 'cup' : 'chat'} size={13} />
             <span>{c.name}</span>
@@ -126,29 +128,23 @@ export function ServiceCounter() {
       : 1;
   return (
     <div className="service-counter">
-      <div className="section-inline">
-        <span className="eyebrow">CERITA DI SEBERANG COUNTER</span>
-        <span className="count-badge">{day.customers.length} tamu</span>
-      </div>
-      <h2>Kenali. Racik. Beri senyum.</h2>
-      <p className="service-intro">
-        Siapkan pesanan tamu, atau bantu memilih jika mereka meminta rekomendasi.
-      </p>
+      <h2>Serve Customers</h2>
+      <p className="service-intro">Find out what customers want, then prepare their drinks.</p>
       {reaction && (
         <div className="service-reaction" role="status">
           <Portrait archetype={reaction.archetype} />
           <div>
-            <strong>{reaction.name} bilang…</strong>
+            <strong>{reaction.name} says…</strong>
             <p>“{reaction.line}”</p>
             <small>
-              {money(reaction.contribution)} sebelum operasional · reputasi{' '}
+              {money(reaction.contribution)} before operating costs · reputation{' '}
               {reaction.reputationDelta >= 0 ? '+' : ''}
               {reaction.reputationDelta}
             </small>
           </div>
           <button
             className="reaction-close"
-            aria-label="Tutup tanggapan pelanggan"
+            aria-label="Dismiss customer feedback"
             onClick={() => gameStore.setState({ lastReaction: null })}
           >
             <Icon name="x" size={14} />
@@ -156,13 +152,13 @@ export function ServiceCounter() {
         </div>
       )}
       {day.customers.length > 0 && (
-        <div className="service-queue" role="group" aria-label="Pilih pelanggan">
+        <div className="service-queue" role="group" aria-label="Select a customer">
           {day.customers.map((c) => (
             <button
               className={customer?.id === c.id ? 'selected' : ''}
               key={c.id}
               aria-pressed={customer?.id === c.id}
-              aria-label={`Ngobrol dengan ${c.name}`}
+              aria-label={`Talk to ${c.name}`}
               onClick={() => store.selectCustomer(c.id)}
             >
               <Portrait archetype={c.archetype} />
@@ -170,8 +166,8 @@ export function ServiceCounter() {
                 <strong>{c.name}</strong>
                 <small>
                   {c.service.stage === 'ready'
-                    ? 'Minuman siap!'
-                    : `${remainingPatience(c, day.elapsed)} dtk`}
+                    ? 'Drink ready!'
+                    : `${remainingPatience(c, day.elapsed)} sec`}
                 </small>
               </span>
               {c.service.stage === 'ready' && <span className="queue-ready" />}
@@ -181,29 +177,18 @@ export function ServiceCounter() {
       )}
       {!customer ? (
         <div className="service-empty">
-          <Icon name="chat" size={35} />
-          <strong>
-            {reaction ? 'Satu senyum sudah terlayani.' : 'Pelanggan berikutnya punya cerita.'}
-          </strong>
-          <p>
-            {day.phase === 'closing'
-              ? 'Antrean sudah selesai. Laporanmu segera siap.'
-              : 'Saat tamu datang, klik karakternya atau pilih namanya untuk mengobrol.'}
-          </p>
           <div className="service-preview">
             <span>
               <Icon name="chat" size={14} />
-              Dengarkan
+              Listen
             </span>
-            <Icon name="chevron" size={12} />
             <span>
               <Icon name="coffee" size={14} />
-              Racik
+              Prepare
             </span>
-            <Icon name="chevron" size={12} />
             <span>
               <Icon name="heart" size={14} />
-              Serahkan
+              Serve
             </span>
           </div>
         </div>
@@ -222,12 +207,12 @@ export function ServiceCounter() {
           <div className={`service-patience ${remaining <= 12 ? 'urgent' : ''}`}>
             <div>
               <span>
-                <Icon name="clock" size={12} /> Kesabaran
+                <Icon name="clock" size={12} /> Patience
               </span>
-              <strong>{remaining} detik</strong>
+              <strong>{remaining} seconds</strong>
             </div>
             <progress
-              aria-label={`Kesabaran ${customer.name}`}
+              aria-label={`Patience ${customer.name}`}
               max={customer.patience}
               value={remaining}
             />
@@ -239,13 +224,13 @@ export function ServiceCounter() {
           <div className="service-known">
             {customer.service.askedTaste && (
               <span>
-                <Icon name="heart" size={12} /> Suka{' '}
+                <Icon name="heart" size={12} /> Likes{' '}
                 {PRODUCTS[PEOPLE[customer.archetype].favorite].short}
               </span>
             )}
             {customer.service.askedBudget && (
               <span>
-                <Icon name="wallet" size={12} /> Maks. {money(customer.budget)}
+                <Icon name="wallet" size={12} /> Max. {money(customer.budget)}
               </span>
             )}
           </div>
@@ -257,32 +242,35 @@ export function ServiceCounter() {
                   onClick={() => store.dispatch({ type: 'ask', id: customer.id, topic: 'taste' })}
                 >
                   <Icon name={customer.service.askedTaste ? 'check' : 'heart'} size={14} />
-                  {customer.service.askedTaste ? 'Selera diketahui' : 'Lagi ingin rasa apa?'}
+                  {customer.service.askedTaste
+                    ? 'Taste preference known'
+                    : 'What flavor do you feel like?'}
                 </button>
                 <button
                   disabled={blocked || customer.service.askedBudget}
                   onClick={() => store.dispatch({ type: 'ask', id: customer.id, topic: 'budget' })}
                 >
                   <Icon name={customer.service.askedBudget ? 'check' : 'wallet'} size={14} />
-                  {customer.service.askedBudget ? 'Budget diketahui' : 'Berapa budgetmu?'}
+                  {customer.service.askedBudget ? 'Budget known' : 'What is your budget?'}
                 </button>
               </div>
               <div className="offer-heading">
-                <strong>Tawarkan racikanmu</strong>
-                <small>Harga mengikuti menu hari ini</small>
+                <strong>Recommend a drink</strong>
+                <small>Prices follow the current menu</small>
               </div>
               <div className="service-offers">
                 {productIds.map((id) => {
                   const item = PRODUCTS[id];
                   const available = session.menu[id].active && brewingCapacity(session, id) > 0;
                   const overBudget =
-                    customer.service.askedBudget && session.menu[id].price > customer.budget;
+                    customer.service.askedBudget &&
+                    quotePrice(session.menu[id]).net > customer.budget;
                   return (
                     <button
                       key={id}
                       disabled={blocked || !available}
                       className={overBudget ? 'over-budget' : ''}
-                      aria-label={`Tawarkan ${item.name}`}
+                      aria-label={`Offer ${item.name}`}
                       onClick={() =>
                         store.dispatch({ type: 'offer', id: customer.id, product: id })
                       }
@@ -292,24 +280,29 @@ export function ServiceCounter() {
                         <strong>{item.name}</strong>
                         <small>
                           {!available
-                            ? 'Bahan sedang tidak tersedia'
+                            ? 'Ingredients unavailable'
                             : overBudget
-                              ? 'Melebihi budget pelanggan'
+                              ? 'Over the customer budget'
                               : customer.service.askedTaste &&
                                   id === PEOPLE[customer.archetype].favorite
-                                ? 'Sesuai selera · bonus reputasi'
-                                : `HPP ${money(recipeCost(session.inventory, id).hpp)}`}
+                                ? 'Matches their taste · reputation bonus'
+                                : `COGS ${money(recipeCost(session.inventory, id).hpp)}`}
                         </small>
                       </span>
-                      <b>{money(session.menu[id].price)}</b>
+                      <b>
+                        {money(quotePrice(session.menu[id]).net)}
+                        {!!session.menu[id].discountPercent && (
+                          <small>Discount {session.menu[id].discountPercent}%</small>
+                        )}
+                      </b>
                       <Icon name="chevron" size={14} />
                     </button>
                   );
                 })}
               </div>
               <p className="service-hint">
-                Tawaran di luar budget mengurangi kesabaran 4 detik. Tiga kali ditolak, pelanggan
-                pamit.
+                Offers over budget reduce patience by 4 seconds. After three rejections, the
+                customer leaves.
               </p>
             </>
           )}
@@ -319,9 +312,15 @@ export function ServiceCounter() {
               <div>
                 <strong>{PRODUCTS[customer.product].name}</strong>
                 <span>
-                  Disepakati {money(customer.price)} · HPP {money(cost!.hpp)}
+                  Agreed price: {money(customer.price)} · COGS {money(cost!.hpp)}
                 </span>
-                <small>Selisih per cup {money(customer.price - cost!.hpp)}</small>
+                <small>Margin per cup {money(customer.price - cost!.hpp)}</small>
+                {!!customer.discount && (
+                  <small>
+                    Promo {customer.discountPercent}% · {money(customer.price + customer.discount)}{' '}
+                    − {money(customer.discount)} = {money(customer.price)}
+                  </small>
+                )}
               </div>
               <Icon name="check" size={17} />
             </div>
@@ -335,16 +334,16 @@ export function ServiceCounter() {
                   onClick={() => store.dispatch({ type: 'brew', id: customer.id })}
                 >
                   <Icon name="coffee" size={20} />
-                  Siapkan Pesanan
+                  Prepare Order
                 </button>
                 <p className="service-hint">
-                  Perlu {BREW_SECONDS.standard} detik untuk meracik. Kamu bisa melayani tamu lain
-                  sambil menunggu.
+                  Takes {BREW_SECONDS.standard} seconds to prepare. You can serve other guests while
+                  waiting.
                 </p>
               </div>
               {brewingCapacity(session, customer.product, customer.id) < 1 && (
                 <p className="service-hint warning">
-                  Bahan dipakai pesanan lain. Coba tawarkan racikan berbeda.
+                  Ingredients are reserved for another order. Try offering a different drink.
                 </p>
               )}
               {brewingCapacity(session, customer.product, customer.id) < 1 && (
@@ -353,7 +352,7 @@ export function ServiceCounter() {
                   disabled={blocked}
                   onClick={() => store.dispatch({ type: 'change_order', id: customer.id })}
                 >
-                  Tawarkan menu pengganti <Icon name="arrowRight" size={14} />
+                  Offer a replacement drink <Icon name="arrowRight" size={14} />
                 </button>
               )}
             </>
@@ -363,20 +362,20 @@ export function ServiceCounter() {
               <div className="brew-station-title">
                 <Icon name={stage === 'ready' ? 'cup' : 'coffee'} size={20} />
                 <strong>
-                  {stage === 'ready' ? 'Racikanmu siap diserahkan' : 'Menyiapkan pesanan…'}
+                  {stage === 'ready' ? 'Your drink is ready to serve' : 'Preparing order…'}
                 </strong>
                 <span>
                   {stage === 'ready' ? (
                     <Icon name="check" size={17} />
                   ) : (
-                    `${Math.max(0, customer.service.readyAt! - day.elapsed)} dtk`
+                    `${Math.max(0, customer.service.readyAt! - day.elapsed)} sec`
                   )}
                 </span>
               </div>
               <progress
                 max={prepDuration}
                 value={Math.min(prepDuration, prepElapsed)}
-                aria-label="Progres racikan"
+                aria-label="Drink preparation progress"
               />
               <div className="brew-ingredients">
                 {Object.entries(PRODUCTS[customer.product].recipe).map(([id, qty], i) => (
@@ -389,7 +388,7 @@ export function ServiceCounter() {
                     <Icon name={i === 0 ? 'leaf' : i === 1 ? 'milk' : 'cup'} size={15} />
                     <strong>
                       {qty}
-                      {INGREDIENTS[id as keyof typeof INGREDIENTS].unit === 'buah'
+                      {INGREDIENTS[id as keyof typeof INGREDIENTS].unit === 'pcs'
                         ? ' cup'
                         : INGREDIENTS[id as keyof typeof INGREDIENTS].unit}
                     </strong>
@@ -398,7 +397,7 @@ export function ServiceCounter() {
                 ))}
               </div>
               {stage === 'preparing' && (
-                <p>Pilihanmu sedang diracik. Kamu bisa menyapa tamu lain sambil menunggu.</p>
+                <p>The drink is being prepared. You can greet other guests while waiting.</p>
               )}
             </div>
           )}
@@ -409,14 +408,14 @@ export function ServiceCounter() {
               onClick={() => store.dispatch({ type: 'serve', id: customer.id })}
             >
               <Icon name="cup" size={18} />
-              Serahkan ke {customer.name}
+              Serve to {customer.name}
               <Icon name="arrowRight" size={17} />
             </button>
           )}
           {blocked && store.paused && (
             <p className="service-hint paused">
               <Icon name="pause" size={13} />
-              Tekan Lanjutkan pada kafe untuk melanjutkan pelayanan.
+              Press Resume in the cafe to continue serving.
             </p>
           )}
         </>

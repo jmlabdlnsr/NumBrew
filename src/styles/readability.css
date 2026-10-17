@@ -342,3 +342,54 @@
 .profit-detail-toggle {
   margin-top: 18px;
 }
+.promotion-card {
+  padding: 20px;
+  margin: 18px 0;
+  border: 1px solid #dedfce;
+  border-radius: 12px;
+  background: #fffdf6;
+}
+.promotion-card form {
+  margin: 18px 0 12px;
+}
+.percent-suffix {
+  padding: 0 14px;
+}
+.promo-math {
+  background: #f1f3e8;
+  padding: 15px;
+  border-radius: 9px;
+  margin-top: 14px;
+}
+.promo-math > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  font-size: 13px;
+  color: #596447;
+}
+.promo-math strong {
+  white-space: nowrap;
+}
+.promo-math .promo-net {
+  border-top: 1px solid #d6ddc8;
+  margin-top: 6px;
+  font-weight: 600;
+}
+.promo-label {
+  display: block;
+  color: #64774e;
+  font-size: 11px;
+  line-height: 1.6;
+  margin-top: 5px;
+}
+@media (max-width: 560px) {
+  .promotion-card {
+    padding: 14px;
+  }
+  .promo-math > div {
+    font-size: 12px;
+  }
+}

@@ -4,7 +4,7 @@ import { readSave, writeSave, type SaveEnvelope } from '../infrastructure/persis
 import type { Receipt, ServiceReaction, Session } from '../domain/types';
 
 export type Panel =
-  'supplier' | 'inventory' | 'pricing' | 'report' | 'help' | 'settings' | 'calculation' | null;
+  'supplier' | 'inventory' | 'pricing' | 'promotion' | 'report' | 'help' | 'settings' | null;
 interface Store {
   session: Session | null;
   checkpoint: Session | null;
@@ -137,7 +137,7 @@ export const gameStore = createStore<Store>((set, get) => ({
         saveStatus: 'failed',
         paused: true,
         warning:
-          'Progres belum tersimpan. Coba simpan lagi atau pilih lanjut tanpa save di Pengaturan.',
+          'Progress has not been saved. Try saving again or choose to continue without saving in Settings.',
       });
     }
   },
@@ -152,7 +152,7 @@ export const gameStore = createStore<Store>((set, get) => ({
       selectedCustomerId: null,
       lastReaction: null,
       toast: {
-        text: 'Kembali ke awal persiapan. Transaksi hari ini dibatalkan.',
+        text: 'Returned to the start of preparation. Transactions made today have been undone.',
         error: false,
         id: Date.now(),
       },
@@ -166,7 +166,7 @@ export const gameStore = createStore<Store>((set, get) => ({
   continueInMemory: () =>
     set({
       saveStatus: 'memory',
-      warning: 'Sesi ini tidak disimpan. Progres akan hilang saat halaman ditutup.',
+      warning: 'This session is not being saved. Progress will be lost when the page closes.',
     }),
 }));
 
@@ -187,7 +187,7 @@ export function hydrateGame(): void {
     gameStore.setState({
       hydrated: true,
       saveStatus: 'failed',
-      warning: 'Penyimpanan browser tidak tersedia. Kamu dapat bermain tanpa save.',
+      warning: 'Browser storage is unavailable. You can play without saving.',
     });
   }
 }

@@ -12,6 +12,7 @@ export interface MenuItem {
   active: boolean;
   price: number;
   calculatedHpp?: number;
+  discountPercent?: number;
 }
 export interface Customer {
   id: string;
@@ -20,6 +21,8 @@ export interface Customer {
   product: ProductId;
   budget: number;
   price: number;
+  discount?: number;
+  discountPercent?: number;
   arrivedAt: number;
   patience: number;
   service: CustomerService;
@@ -58,6 +61,7 @@ export interface Receipt {
   day: number;
   price: number;
   discount: number;
+  discountPercent?: number;
   tax: number;
   hpp: number;
   lines: CostLine[];

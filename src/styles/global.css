@@ -341,40 +341,6 @@ button:not(:disabled):active {
 .sidebar-bottom {
   margin-top: auto;
 }
-.owner-profile {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  border-top: 1px solid var(--border);
-  padding: 20px 5px 23px;
-  margin-top: 14px;
-}
-.owner-avatar {
-  width: 33px;
-  height: 33px;
-  background: #e7dcc7;
-  color: #8d795b;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-family: Georgia, serif;
-  font-size: 17px;
-}
-.owner-profile strong {
-  font-size: 11px;
-  font-weight: 600;
-  display: block;
-}
-.owner-profile span {
-  font-size: 9px;
-  color: #989586;
-  display: block;
-  margin-top: 4px;
-}
-.owner-profile > svg {
-  margin-left: auto;
-  color: #8b9a77;
-}
 .main-content {
   margin-left: 216px;
   padding: 30px 32px 20px;
@@ -1689,44 +1655,6 @@ h1 {
 .next-day {
   margin-top: 22px;
 }
-.receipt-heading {
-  text-align: center;
-  margin-bottom: 20px;
-}
-.receipt-heading .round-icon {
-  margin-bottom: 12px;
-}
-.receipt-heading h3 {
-  font-size: 19px;
-}
-.receipt-heading p {
-  font-size: 11px;
-  color: #9a927b;
-  margin-top: 7px;
-}
-.formula-banner {
-  background: #eff3e5;
-  border: 1px solid #dde5cd;
-  padding: 20px;
-  text-align: center;
-  border-radius: 11px;
-  margin-top: 15px;
-  color: #6d8154;
-}
-.formula-banner > span {
-  display: block;
-  font-size: 17px;
-}
-.formula-banner > strong {
-  display: block;
-  font-size: 29px;
-  margin: 12px 0;
-  font-weight: 550;
-}
-.formula-banner small {
-  font-size: 11px;
-  color: #9ca184;
-}
 .help-banner {
   background: #f0f2e5;
   border: 1px solid #e1e7d3;
@@ -2059,9 +1987,7 @@ h1 {
   .brand > span:last-child,
   .sidebar-section,
   .nav-item > span,
-  .nav-item > svg:last-child:not(:first-child),
-  .owner-profile > div:not(.owner-avatar),
-  .owner-profile > svg {
+  .nav-item > svg:last-child:not(:first-child) {
     display: none;
   }
   .brand-icon {
@@ -2085,10 +2011,6 @@ h1 {
   }
   .sidebar-bottom {
     width: 100%;
-  }
-  .owner-profile {
-    padding: 18px 0;
-    justify-content: center;
   }
   .main-content {
     margin-left: 76px;

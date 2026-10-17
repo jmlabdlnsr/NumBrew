@@ -16,10 +16,10 @@ export function hasCalculatedHpp(session: Session, product: ProductId): boolean 
 
 export function hppFeedback(answer: number, expected: number): string | null {
   if (!Number.isSafeInteger(answer) || answer <= 0)
-    return 'Masukkan total dalam Rupiah bulat, misalnya 5000 atau 5.000.';
+    return 'Enter a whole Rupiah total, for example 5000 or 5.000.';
   if (answer < expected)
-    return 'Totalmu masih terlalu kecil. Jumlahkan semua biaya bahan per porsi, termasuk cup & tutup.';
+    return 'Your total is too low. Add all ingredient costs per serving, including the cup & lid.';
   if (answer > expected)
-    return 'Totalmu masih terlalu besar. Jumlahkan biaya per porsi di sebelah kanan, bukan harga satu paket bahan.';
+    return 'Your total is too high. Add the costs per serving on the right, not the price of each whole pack.';
   return null;
 }
