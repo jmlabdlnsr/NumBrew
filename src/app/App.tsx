@@ -172,8 +172,8 @@ export default function App() {
             <div className="institution-logos" aria-label="Project institutions">
               <img src="/assets/icon/Logo%20DMGC.png" alt="DMGC" loading="lazy" />
               <img
-                src="/assets/icon/universitas-syiah-kuala.png"
-                alt="Universitas Syiah Kuala"
+                src="/assets/icon/Universitas-Siliwangi.png"
+                alt="Universitas Siliwangi"
                 loading="lazy"
               />
             </div>
